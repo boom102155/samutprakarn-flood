@@ -1,0 +1,349 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-01T04:41:28.376Z",
+  "title": "Design System: น้ำสมุทรปราการ",
+  "extensions": {
+    "colorMeta": {
+      "navy-950": {
+        "role": "primary",
+        "displayName": "Deep Field Navy",
+        "canonical": "#102a49",
+        "tonalRamp": ["#000b1f", "#0b2544", "#294364", "#476386", "#6785a9", "#89a8ce", "#acccf4", "#e4f0ff"]
+      },
+      "navy-900": {
+        "role": "secondary",
+        "displayName": "Bulletin Navy",
+        "canonical": "#14375f",
+        "tonalRamp": ["#000b1e", "#01254b", "#20436c", "#3f638f", "#6085b2", "#81a8d8", "#a5cdfe", "#e4f0ff"]
+      },
+      "navy-800": {
+        "role": "secondary",
+        "displayName": "Working Navy",
+        "canonical": "#184774",
+        "tonalRamp": ["#000b1c", "#002648", "#144470", "#366493", "#5786b7", "#79a9dd", "#a0ceff", "#e3f0ff"]
+      },
+      "blue-700": {
+        "role": "secondary",
+        "displayName": "Signal Blue",
+        "canonical": "#1769dc",
+        "tonalRamp": ["#000923", "#002155", "#003c8d", "#0059c9", "#2f7df2", "#6ba5ff", "#a9cbff", "#e5efff"]
+      },
+      "blue-600": {
+        "role": "primary",
+        "displayName": "Field Blue",
+        "canonical": "#287bea",
+        "tonalRamp": ["#000a21", "#002252", "#003e88", "#005cc3", "#2c7fee", "#67a6ff", "#a8cbff", "#e5efff"]
+      },
+      "blue-100": {
+        "role": "secondary",
+        "displayName": "Pale Blue Wash",
+        "canonical": "#e7f0ff",
+        "tonalRamp": ["#060b15", "#1f2530", "#3b424e", "#5a626e", "#7b8390", "#9da6b4", "#c1cad8", "#e6effe"]
+      },
+      "blue-50": {
+        "role": "secondary",
+        "displayName": "Quiet Blue Wash",
+        "canonical": "#f3f7ff",
+        "tonalRamp": ["#090b10", "#22252b", "#3f4248", "#5e6168", "#7f8289", "#a1a5ac", "#c5c9d1", "#ebeff6"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Cool Canvas",
+        "canonical": "#f2f6fa",
+        "tonalRamp": ["#090b0e", "#222528", "#3f4246", "#5e6265", "#7f8386", "#a2a5a9", "#c6cacd", "#ebeff3"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Reading White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Report Ink",
+        "canonical": "#162b42",
+        "tonalRamp": ["#000b1d", "#11263d", "#2e445c", "#4c637e", "#6d85a0", "#8fa8c4", "#b2ccea", "#e3f0ff"]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#52667c",
+        "tonalRamp": ["#000b1c", "#152639", "#314458", "#4f6379", "#70859c", "#92a7c0", "#b5cce5", "#e3f0ff"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#708195",
+        "tonalRamp": ["#020b1a", "#182636", "#344355", "#536376", "#738498", "#95a7bc", "#b9cbe1", "#e3f0ff"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Quiet Divider",
+        "canonical": "#dce5ee",
+        "tonalRamp": ["#060c11", "#1f262c", "#3c434a", "#5a626a", "#7b838b", "#9ea6af", "#c1cad3", "#e7f0f9"]
+      },
+      "line-light": {
+        "role": "neutral",
+        "displayName": "Light Divider",
+        "canonical": "#eaf0f5",
+        "tonalRamp": ["#080c0f", "#212629", "#3e4347", "#5d6266", "#7e8388", "#a0a6aa", "#c4cacf", "#e9eff4"]
+      },
+      "teal": {
+        "role": "severity",
+        "displayName": "Dry Teal",
+        "canonical": "#15946a",
+        "tonalRamp": ["#000f08", "#002d1d", "#004f36", "#007351", "#1e996e", "#4ebd90", "#75e2b4", "#c1ffe1"]
+      },
+      "amber": {
+        "role": "tertiary",
+        "displayName": "Status Amber",
+        "canonical": "#e4b932",
+        "tonalRamp": ["#100a00", "#2f2300", "#523f00", "#775e00", "#9f7e00", "#c99f00", "#efc441", "#ffedbf"]
+      },
+      "red": {
+        "role": "tertiary",
+        "displayName": "Alert Red",
+        "canonical": "#d94d48",
+        "tonalRamp": ["#1f0001", "#4d0005", "#80000e", "#b02225", "#d84c47", "#ff736a", "#ffb3ab", "#ffe9e6"]
+      },
+      "severity-shallow": {
+        "role": "severity",
+        "displayName": "Shallow Amber",
+        "canonical": "#dfb72e",
+        "tonalRamp": ["#100a00", "#2f2400", "#514000", "#765e00", "#9e7f00", "#c7a000", "#edc541", "#ffeebc"]
+      },
+      "severity-below-ankle": {
+        "role": "severity",
+        "displayName": "Ankle Lime",
+        "canonical": "#a7c83b",
+        "tonalRamp": ["#161b00", "#353e00", "#596400", "#809000", "#a7bc2e", "#c5d858", "#e2f18f", "#f5ffd5"]
+      },
+      "severity-knee": {
+        "role": "severity",
+        "displayName": "Knee-Depth Orange",
+        "canonical": "#ed8933",
+        "tonalRamp": ["#160700", "#3c1b00", "#653300", "#924c00", "#c26700", "#ec8832", "#ffb783", "#ffeadc"]
+      },
+      "severity-chest": {
+        "role": "severity",
+        "displayName": "Chest-Depth Red",
+        "canonical": "#e6534c",
+        "tonalRamp": ["#1f0001", "#4d0004", "#81000c", "#b21c20", "#db4843", "#ff7369", "#ffb3aa", "#ffe9e6"]
+      },
+      "severity-deep": {
+        "role": "severity",
+        "displayName": "Deep Water Brown",
+        "canonical": "#956341",
+        "tonalRamp": ["#170600", "#3d1a00", "#623411", "#855432", "#a87553", "#cd9874", "#f3bc97", "#ffeadd"]
+      },
+      "severity-submerged": {
+        "role": "severity",
+        "displayName": "Submerged Violet",
+        "canonical": "#8b6bc4",
+        "tonalRamp": ["#110027", "#30055b", "#4d2b7e", "#6d4ca2", "#8e6ec7", "#b191ed", "#d1bcff", "#f1ebff"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Bulletin Display",
+        "purpose": "Opening home headline; Anuphan variable carries the largest Thai message."
+      },
+      "headline": {
+        "displayName": "Page Headline",
+        "purpose": "View titles and major page headings."
+      },
+      "title": {
+        "displayName": "Section Title",
+        "purpose": "Panel and report section headings."
+      },
+      "body": {
+        "displayName": "Thai Body",
+        "purpose": "Default interface copy and readable supporting text."
+      },
+      "label": {
+        "displayName": "Compact Label",
+        "purpose": "Field labels and small status captions."
+      },
+      "button": {
+        "displayName": "Action Label",
+        "purpose": "Standard desktop button labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "soft-surface",
+        "value": "0 9px 28px rgba(21, 52, 87, .07)",
+        "purpose": "Lifts map-empty and loading overlays slightly above their surface."
+      },
+      {
+        "name": "primary-action",
+        "value": "0 4px 12px rgba(9,47,101,.2)",
+        "purpose": "Small offset beneath the standard blue primary button."
+      },
+      {
+        "name": "bulletin-rack",
+        "value": "inset 0 1px rgba(255,255,255,.05), 0 7px 18px rgba(8,25,44,.16)",
+        "purpose": "Separates the inset severity rack from the larger navy bulletin."
+      },
+      {
+        "name": "map-surface",
+        "value": "0 8px 22px rgba(23,50,79,.07)",
+        "purpose": "Softly lifts the full map surface from the page."
+      }
+    ],
+    "motion": [
+      {
+        "name": "content-enter",
+        "value": "0.35s cubic-bezier(.16,1,.3,1)",
+        "purpose": "Brief upward fade when page content enters."
+      },
+      {
+        "name": "button-state",
+        "value": "0.16s ease",
+        "purpose": "Button color, border, and small hover-lift transitions."
+      },
+      {
+        "name": "navigation-state",
+        "value": "0.18s ease",
+        "purpose": "Sidebar navigation background, text, and border changes."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce; animation/transition duration 0.01ms",
+        "purpose": "The stylesheet reduces animated and smooth-scrolling motion when requested."
+      }
+    ],
+    "breakpoints": [
+      { "name": "wide", "value": "1500px", "purpose": "Wider content gutters and map/intro adjustments." },
+      { "name": "compact-desktop", "value": "1180px", "purpose": "Narrower sidebar and working columns." },
+      { "name": "tablet-rail", "value": "900px", "purpose": "Icon-only sidebar and stacked workspaces." },
+      { "name": "mobile", "value": "640px", "purpose": "Mobile header and fixed bottom navigation replace the sidebar." },
+      { "name": "narrow-mobile", "value": "380px", "purpose": "Tighter page gutters and selected compact labels." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-report-main",
+      "description": "The unmistakable first action on the home bulletin, sized larger than its supporting map link.",
+      "html": "<button class=\"ds-report-action\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\" /></svg>รายงานระดับน้ำ</button>",
+      "css": ".ds-report-action { display: inline-flex; min-height: 56px; align-items: center; justify-content: center; gap: 11px; padding: 0 24px; color: #fff; border: 2px solid var(--blue-100); border-radius: 9px; background: var(--blue-600); box-shadow: 0 4px 12px rgba(9,47,101,.2); font: 800 18px/1.4 var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; letter-spacing: -.01em; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease; } .ds-report-action svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; } .ds-report-action:hover { color: #fff; border-color: var(--blue-100); background: #1769dc; box-shadow: 0 4px 12px rgba(9,47,101,.2); transform: translateY(-1px); } .ds-report-action:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 3px; } .ds-report-action:active { transform: translateY(0); } @media (max-width: 640px) { .ds-report-action { width: auto; min-height: 54px; font-size: 16px; } }"
+    },
+    {
+      "name": "Quiet Action",
+      "kind": "button",
+      "description": "Translucent outlined action for use on the navy intro surface.",
+      "html": "<button class=\"ds-button-quiet\">ดูแผนที่<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 12h15m-6-7 7 7-7 7\" /></svg></button>",
+      "css": ".ds-button-quiet { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; color: #eff6ff; border: 1px solid rgba(218,235,255,.23); border-radius: 8px; background: rgba(255,255,255,.075); font: 700 15px/1.4 var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; } .ds-button-quiet svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-button-quiet:hover { background: rgba(255,255,255,.15); transform: translateY(-1px); } .ds-button-quiet:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 2px; } .ds-button-quiet:active { transform: translateY(0); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "description": "Compact white field for location and report details, with a visible blue focus state.",
+      "html": "<label class=\"ds-text-field\"><span>ชื่อสถานที่ / ถนน</span><input type=\"text\" placeholder=\"เช่น ถนนกิ่งแก้ว\" /></label>",
+      "css": ".ds-text-field { display: grid; gap: 7px; color: #3f5972; font: 700 13px/1.5 var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; } .ds-text-field input { width: 100%; min-height: 44px; padding: 8px 11px; color: #23415e; border: 1px solid #d6e1eb; border-radius: 7px; background: #fff; font: 400 16px/1.5 var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; transition: border-color .16s ease, box-shadow .16s ease; } .ds-text-field input::placeholder { color: #7a8c9f; opacity: 1; } .ds-text-field input:hover { border-color: #afc4d8; } .ds-text-field input:focus-visible { border-color: #7eafea; outline: 3px solid rgba(40,123,234,.35); outline-offset: 1px; box-shadow: 0 0 0 3px rgba(39,119,220,.1); }"
+    },
+    {
+      "name": "White Bulletin Sheet",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "White reading sheet with a cool outline and a compact heading, matching map and latest-report panels.",
+      "html": "<section class=\"ds-bulletin-sheet\"><h3>สถานการณ์บนแผนที่</h3><p>แตะจุดเพื่อดูรายงานในพื้นที่</p><span>รายงานล่าสุด · 22 นาทีที่แล้ว</span></section>",
+      "css": ".ds-bulletin-sheet { padding: 17px; color: var(--ink); border: 1px solid var(--line); border-radius: 13px; background: var(--paper); font-family: var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; } .ds-bulletin-sheet h3 { margin: 0; color: #193754; font-size: 20px; font-weight: 750; } .ds-bulletin-sheet p { margin: 4px 0 14px; color: #708195; font-size: 14px; } .ds-bulletin-sheet span { display: block; padding-top: 9px; color: #52667c; border-top: 1px solid #eaf0f5; font-size: 12px; } .ds-bulletin-sheet:hover { border-color: #cbd9e7; } .ds-bulletin-sheet:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 2px; }"
+    },
+    {
+      "name": "Severity Rack",
+      "kind": "custom",
+      "refersTo": "severity-rack",
+      "description": "Inset navy panel with six tabbed ivory severity slides and narrow color tracks.",
+      "html": "<section class=\"ds-severity-rack\"><strong>ระดับน้ำตามรายงาน</strong><div class=\"ds-severity-slides\"><div class=\"ds-severity-slide\"><i style=\"--severity:#15946a\"></i><span>แห้ง</span><b>1</b></div><div class=\"ds-severity-slide\"><i style=\"--severity:#dfb72e\"></i><span>ไม่เกินหัวเข่า</span><b>4</b></div><div class=\"ds-severity-slide\"><i style=\"--severity:#ed8933\"></i><span>หัวเข่า–เอว</span><b>2</b></div><div class=\"ds-severity-slide\"><i style=\"--severity:#e6534c\"></i><span>เอว–หน้าอก</span><b>1</b></div><div class=\"ds-severity-slide\"><i style=\"--severity:#956341\"></i><span>เลยหน้าอก</span><b>1</b></div><div class=\"ds-severity-slide\"><i style=\"--severity:#8b6bc4\"></i><span>มิดหัว</span><b>0</b></div></div></section>",
+      "css": ".ds-severity-rack { display: grid; gap: 8px; padding: 12px; color: #f1f6fc; border: 1px solid rgba(199,222,247,.27); border-radius: 10px; background: #123153; box-shadow: inset 0 1px rgba(255,255,255,.05), 0 7px 18px rgba(8,25,44,.16); font-family: var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; font-size: 13px; } .ds-severity-slides { display: grid; gap: 5px; } .ds-severity-slide { display: grid; min-height: 28px; grid-template-columns: 4px minmax(0,1fr) 18px; align-items: center; gap: 7px; padding: 4px 7px 4px 5px; color: #28435e; border: 1px solid rgba(255,255,255,.54); border-radius: 3px; background: #edf4fb; } .ds-severity-slide:nth-child(even) { transform: translateX(3px); } .ds-severity-slide i { width: 4px; height: 14px; border-radius: 2px; background: var(--severity); } .ds-severity-slide span { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; } .ds-severity-slide b { color: #203f5e; font-size: 12px; text-align: right; } .ds-severity-rack:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 2px; }"
+    },
+    {
+      "name": "Severity Choice",
+      "kind": "chip",
+      "description": "Selectable water-severity control with its reserved color and a clear selected surface.",
+      "html": "<button class=\"ds-severity-chip\" aria-pressed=\"true\"><i></i><span>ข้อเท้า–หัวเข่า</span><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\" /></svg></button>",
+      "css": ".ds-severity-chip { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; padding: 8px 12px; color: #184875; border: 1px solid #6fa3df; border-radius: 7px; background: #eff6ff; box-shadow: inset 0 0 0 1px rgba(47,120,205,.11); font: 700 13px/1.5 var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; cursor: pointer; transition: border-color .15s ease, background .15s ease; } .ds-severity-chip i { width: 11px; height: 11px; border: 1px solid rgba(34,58,80,.14); border-radius: 50%; background: #e4b932; } .ds-severity-chip svg { width: 15px; height: 15px; margin-left: auto; fill: none; stroke: #1769c8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .ds-severity-chip:hover { border-color: #4f8bcf; background: #e7f1ff; } .ds-severity-chip:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 2px; } .ds-severity-chip:active { background: #daeaff; }"
+    },
+    {
+      "name": "Report Row",
+      "kind": "custom",
+      "description": "Location-first row that pairs severity and report recency at the trailing edge.",
+      "html": "<button class=\"ds-report-row\"><i></i><span class=\"ds-report-main\"><b>แยกปากน้ำ ถนนสุขุมวิท</b><small>ปากน้ำ · เมืองสมุทรปราการ</small></span><span class=\"ds-report-state\"><b>หัวเข่า–เอว</b><small>22 นาทีที่แล้ว</small></span><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 12h14m-6-6 6 6-6 6\" /></svg></button>",
+      "css": ".ds-report-row { display: flex; width: 100%; min-height: 72px; align-items: center; gap: 11px; padding: 11px 8px; color: #1b3957; border: 0; border-top: 1px solid #eaf0f5; background: transparent; text-align: left; font-family: var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; cursor: pointer; transition: background .16s ease; } .ds-report-row > i { width: 10px; height: 10px; flex: 0 0 auto; border: 1px solid rgba(20,48,73,.14); border-radius: 50%; background: #ed8933; } .ds-report-main, .ds-report-state { display: grid; min-width: 0; gap: 3px; } .ds-report-main { flex: 1; } .ds-report-main b { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; } .ds-report-main small, .ds-report-state small { color: #728399; font-size: 12px; } .ds-report-state { justify-items: end; } .ds-report-state b { color: #ed8933; font-size: 12px; } .ds-report-row > svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: #8ba0b5; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-report-row:hover { background: #f5f9fd; } .ds-report-row:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 2px; } .ds-report-row:active { background: #edf4fb; }"
+    },
+    {
+      "name": "Flood Map Marker",
+      "kind": "custom",
+      "description": "Filled severity circle with a dark outline; dashed outline denotes a receded report.",
+      "html": "<span class=\"ds-map-marker\" style=\"--marker-color:#ed8933\"></span>",
+      "css": ".ds-map-marker { display: block; width: 21px; height: 21px; border: 1.5px solid #162b42; border-radius: 50%; background: var(--marker-color); box-shadow: 0 1px 3px rgba(18,35,51,.35); } .ds-map-marker.is-receded { border-style: dashed; } .ds-map-marker:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 2px; }"
+    },
+    {
+      "name": "Desktop Navigation Item",
+      "kind": "nav",
+      "description": "Navy sidebar destination with a brighter selected surface and blue edge marker.",
+      "html": "<button class=\"ds-sidebar-item\"><span aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\"><path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z\" /></svg></span><b>หน้าหลัก</b><i></i></button>",
+      "css": ".ds-sidebar-item { position: relative; display: flex; width: 100%; min-height: 48px; align-items: center; gap: 12px; padding: 0 12px; color: #c4d4e6; border: 1px solid transparent; border-radius: 9px; background: transparent; font: 600 15px/1.4 var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; text-align: left; cursor: pointer; transition: background .18s ease, color .18s ease, border-color .18s ease; } .ds-sidebar-item > span svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-sidebar-item:hover { color: #fff; background: rgba(255,255,255,.075); } .ds-sidebar-item:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 2px; } .ds-sidebar-item:active { background: rgba(255,255,255,.12); } .ds-sidebar-item[aria-current=\"page\"] { color: #fff; border-color: rgba(134,182,245,.2); background: #1c4b80; font-weight: 700; } .ds-sidebar-item[aria-current=\"page\"] i { position: absolute; top: 11px; right: -1px; bottom: 11px; width: 3px; border-radius: 4px 0 0 4px; background: #69a8ff; }"
+    },
+    {
+      "name": "Mobile Navigation Item",
+      "kind": "nav",
+      "description": "Compact destination label in the fixed white bottom navigation, with a pale blue active state.",
+      "html": "<nav class=\"ds-mobile-nav\"><button class=\"ds-mobile-nav-item\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z\" /></svg><small>หน้าหลัก</small></button><button class=\"ds-mobile-nav-item\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z\" /><path d=\"M9 3v15m6-12v15\" /></svg><small>แผนที่</small></button></nav>",
+      "css": ".ds-mobile-nav { display: grid; grid-template-columns: repeat(2,1fr); align-items: stretch; padding: 4px; border-top: 1px solid #d9e3ec; background: rgba(255,255,255,.98); box-shadow: 0 -4px 17px rgba(28,56,84,.05); font-family: var(--font-anuphan), \"Leelawadee UI\", Tahoma, Arial, sans-serif; } .ds-mobile-nav-item { display: grid; min-height: 56px; align-content: center; justify-items: center; gap: 2px; padding: 0 1px; color: #78899b; border: 0; border-radius: 8px; background: transparent; font-size: 11px; cursor: pointer; } .ds-mobile-nav-item svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-mobile-nav-item:hover { background: #f5f9fd; } .ds-mobile-nav-item:focus-visible { outline: 3px solid rgba(40,123,234,.45); outline-offset: 1px; } .ds-mobile-nav-item:active { background: #e8f2ff; } .ds-mobile-nav-item[aria-current=\"page\"] { color: #1769c8; background: #f0f6ff; font-weight: 750; } .ds-mobile-nav-item small { font-size: 11px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Bulletin Rack",
+    "overview": "The Field Bulletin Rack turns local flood observations into a calm operational bulletin: navy navigation and blue controls establish the working frame, while clear white sheets keep Thai reports and map details easy to read. Its signature severity rack presents six water states as compact ivory slides with exposed color tabs and narrow tracks, rather than a wall of interchangeable dashboard cards.\n\nThe interface favors fast scanning over ornament. Anuphan supports Thai-first reading, while concise labels, visible recency, and distinct severity marks help people compare reports. On narrow screens the persistent navigation changes from a left rail to a bottom bar; the map, report rows, and bulletin sheets remain the working content.",
+    "keyCharacteristics": [
+      "Navy operating frame with bright blue action cues and white reading sheets.",
+      "Six reserved water-level hues, repeated consistently in the rack, legend, and map markers.",
+      "Compact Thai typography, rounded panels, and small, restrained offset shadows.",
+      "Desktop sidebar navigation becomes a five-destination mobile bottom navigation."
+    ],
+    "rules": [
+      {
+        "name": "The Severity Reservation Rule",
+        "body": "The six water-level hues belong to water-status data: keep them consistent across the rack, legend, report marks, and map markers.",
+        "section": "colors"
+      },
+      {
+        "name": "The Thai-First Variable Rule",
+        "body": "Use the self-hosted Anuphan variable face for interface text and preserve its fallback sequence; create hierarchy through the observed size and weight changes.",
+        "section": "typography"
+      },
+      {
+        "name": "The Small-Offset Rule",
+        "body": "Use shadows as restrained separation for controls and overlays; let the white sheet, pale canvas, and fine borders do most of the depth work.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Bulletin Sheet Rule",
+        "body": "Keep the severity summary as tabbed ivory slides with slim status tracks inside its navy operating surface.",
+        "section": "components"
+      },
+      {
+        "name": "The Age-and-State Rule",
+        "body": "Preserve the implementation's age fade, dashed receded marker, and 36-hour report window wherever the corresponding map state is presented.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do reserve the six severity colors for water status and repeat each hue consistently between the rack, legend, report rows, and map.",
+      "Do keep location, water severity, and report time easy to scan before secondary detail.",
+      "Do use Anuphan variable for the Thai interface and preserve the mobile size reductions that are present in the implementation.",
+      "Do keep the white reading sheets distinct from the pale canvas with their cool borders and restrained shadows.",
+      "Do retain all five navigation destinations when switching from the desktop rail to the mobile bottom bar."
+    ],
+    "donts": [
+      "Don't replace the six-state rack with a wall of interchangeable dashboard cards.",
+      "Don't use severity hues as generic navigation or action colors.",
+      "Don't hide report recency or the receded state when rendering report markers and rows.",
+      "Don't let decorative type or tilt compromise Thai reading clarity."
+    ]
+  }
+}
