@@ -155,7 +155,7 @@ export default function FloodMap(props: FloodMapProps) {
             icon={reportMarker(report)}
             eventHandlers={{ click: () => props.onSelect?.(report) }}
           >
-            <Popup minWidth={248} maxWidth={300} closeButton>
+            <Popup minWidth={248} maxWidth={300} closeButton closeOnClick={false}>
               <ReportPopup report={report} props={props} />
             </Popup>
           </Marker>
