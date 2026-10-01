@@ -790,3 +790,40 @@ body { font-size: var(--type-body); }
   .home-map-panel .section-heading h2 { font-size: var(--type-subsection); line-height: 1.35; }
   .home-map-panel .section-heading .text-link { flex: 0 0 auto; }
 }
+
+.rain-forecast-control { display: grid; gap: 9px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.rain-forecast-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rain-layer-toggle { display: inline-flex; min-width: 0; align-items: center; gap: 9px; padding: 0; color: #264866; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.rain-layer-toggle > svg { flex: 0 0 auto; color: var(--blue-700); }
+.rain-layer-toggle > span { display: grid; gap: 1px; }
+.rain-layer-toggle strong { font-size: 12px; font-weight: 750; }
+.rain-layer-toggle small { color: var(--muted); font-size: 10px; }
+.rain-toggle-indicator { position: relative; width: 30px; height: 17px; flex: 0 0 auto; margin-left: 2px; border-radius: 10px; background: #cbd6e0; transition: background .16s ease; }
+.rain-toggle-indicator::after { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(16,42,73,.2); content: ""; transition: transform .16s ease; }
+.rain-layer-toggle[aria-pressed="true"] .rain-toggle-indicator { background: var(--blue-600); }
+.rain-layer-toggle[aria-pressed="true"] .rain-toggle-indicator::after { transform: translateX(13px); }
+.rain-forecast-status { display: inline-flex; align-items: center; gap: 6px; color: #55708a; font-size: 10px; }
+.rain-forecast-status .spinner { width: 12px; height: 12px; border-width: 1.5px; }
+.rain-time-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.rain-time-options button { min-height: 31px; padding: 0 10px; color: #516a82; border: 1px solid #d8e3ed; border-radius: 7px; background: #fff; font-size: 10px; font-weight: 650; cursor: pointer; transition: color .16s ease, border-color .16s ease, background .16s ease; }
+.rain-time-options button:hover { border-color: #98bce6; background: #f5f9ff; }
+.rain-time-options button.selected { color: #1559a4; border-color: #77a9e5; background: var(--blue-50); }
+.rain-time-options button:focus-visible { outline: 3px solid rgba(40,123,234,.35); outline-offset: 2px; }
+.rain-forecast-scale { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 13px; color: #526a82; font-size: 10px; }
+.rain-forecast-scale strong { color: #294965; font-weight: 750; }
+.rain-forecast-scale span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.rain-forecast-scale i { width: 10px; height: 10px; border-radius: 50%; }
+.rain-scale-light { background: #7dd3fc; }
+.rain-scale-medium { background: #38bdf8; }
+.rain-scale-heavy { background: #2563eb; }
+.rain-scale-intense { background: #7c3aed; }
+.rain-scale-extreme { background: #be185d; }
+.rain-forecast-note { margin: 0; color: #74869a; font-size: 9px; line-height: 1.55; }
+.rain-forecast-note a { color: #1769c8; }
+.rain-forecast-error { display: flex; align-items: center; gap: 6px; margin: 0; color: #a93e3a; font-size: 10px; }
+.rain-forecast-error button { margin-left: auto; padding: 4px 7px; color: #1559a4; border: 1px solid #c9dbf0; border-radius: 6px; background: #f5f9ff; font-size: 10px; font-weight: 700; cursor: pointer; }
+@media (max-width: 640px) {
+  .rain-forecast-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .rain-time-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rain-time-options button { padding: 0 5px; }
+}

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useCallback } from "react";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck,
@@ -14,6 +14,7 @@ import {
   subdistrictsByDistrict, VehicleType, waterLevels, WaterTrend,
 } from "@/lib/types";
 import { timeAgo, useFloodReports } from "@/lib/useFloodReports";
+import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
 import CameraHlsFeed, { CameraFeedStatus } from "@/components/CameraHlsFeed";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), {
@@ -339,11 +340,90 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
 
 function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onFlag }: { reports: FloodReport[]; selectedId: string | null; onSelect: (report: FloodReport) => void; onStillFlooded: (id: string) => void; onReceded: (id: string) => void; onFlag: (id: string, reason: string) => void }) {
   const visible = reportsWithin36Hours(reports);
+  const [rainEnabled, setRainEnabled] = useState(false);
+  const [rainLoading, setRainLoading] = useState(false);
+  const [rainError, setRainError] = useState("");
+  const [rainForecast, setRainForecast] = useState<RainForecastData | null>(null);
+  const [forecastHours, setForecastHours] = useState(1);
+  const [rainRetryToken, setRainRetryToken] = useState(0);
+
+  useEffect(() => {
+    if (!rainEnabled || rainForecast) return;
+    const controller = new AbortController();
+    setRainLoading(true);
+    setRainError("");
+
+    void fetch("/api/rain-forecast", { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as RainForecastData & { error?: string };
+        if (!response.ok) throw new Error(result.error || "โหลดพยากรณ์ฝนไม่สำเร็จ");
+        if (!result.times?.length || !result.points?.length) throw new Error("ยังไม่มีข้อมูลพยากรณ์ฝน");
+        setRainForecast(result);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setRainError(error instanceof Error ? error.message : "โหลดพยากรณ์ฝนไม่สำเร็จ");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRainLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [rainEnabled, rainForecast, rainRetryToken]);
+
+  const targetForecastTime = Date.now() + forecastHours * 60 * 60 * 1000;
+  const forecastIndex = rainForecast?.times.reduce((closestIndex, time, index, times) => (
+    Math.abs(Date.parse(time) - targetForecastTime) < Math.abs(Date.parse(times[closestIndex]) - targetForecastTime)
+      ? index
+      : closestIndex
+  ), 0) ?? 0;
+  const rainMapPoints = useMemo<RainMapPoint[]>(() => rainForecast?.points.map((point) => ({
+    latitude: point.latitude,
+    longitude: point.longitude,
+    precipitation: point.precipitation[forecastIndex] ?? null,
+  })) ?? [], [rainForecast, forecastIndex]);
+  const forecastTime = rainForecast?.times[forecastIndex];
+  const forecastTimeLabel = forecastTime
+    ? new Intl.DateTimeFormat("th-TH", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(forecastTime))
+    : "";
+  const forecastUpdatedLabel = rainForecast
+    ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(rainForecast.generatedAt))
+    : "";
+
   return (
     <div className="content-page map-page">
       <PageHeader title="แผนที่ระดับน้ำ" description="สถานการณ์จากรายงานของคนในพื้นที่สมุทรปราการ" action={<div className="map-total"><span className="status-pulse" />{visible.length} จุดบนแผนที่</div>} />
-      <div className="map-legend-block"><WaterLegend /><p><Info size={15} />จุดจางลงเมื่อเกิน 12 และ 24 ชม. หายไปเมื่อเกิน 36 ชม. · จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมอยู่หรือน้ำลดแล้ว</p></div>
-      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} className="full-map" /></div>
+      <div className="map-legend-block">
+        <WaterLegend />
+        <p><Info size={15} />จุดจางลงเมื่อเกิน 12 และ 24 ชม. หายไปเมื่อเกิน 36 ชม. · จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
+        <section className={`rain-forecast-control${rainEnabled ? " is-enabled" : ""}`} aria-label="ชั้นพยากรณ์ฝน">
+          <div className="rain-forecast-heading">
+            <button type="button" className="rain-layer-toggle" aria-pressed={rainEnabled} onClick={() => setRainEnabled((enabled) => !enabled)}>
+              <CloudRain size={18} />
+              <span><strong>พยากรณ์ฝน</strong><small>{rainEnabled ? "เปิดชั้นฝนบนแผนที่" : "เลือกเวลาเพื่อดูฝนคาดการณ์"}</small></span>
+              <i className="rain-toggle-indicator" />
+            </button>
+            {rainEnabled && <span className="rain-forecast-status">{rainLoading ? <><span className="spinner" />กำลังโหลดพยากรณ์…</> : rainError ? "โหลดข้อมูลไม่สำเร็จ" : forecastTimeLabel ? `มีผล ${forecastTimeLabel}` : "เตรียมข้อมูลพยากรณ์"}</span>}
+          </div>
+          {rainEnabled && <>
+            <div className="rain-time-options" role="group" aria-label="เลือกเวลาพยากรณ์ฝน">
+              {rainForecastOptions.map((option) => <button key={option.hours} type="button" className={forecastHours === option.hours ? "selected" : ""} aria-pressed={forecastHours === option.hours} onClick={() => setForecastHours(option.hours)}>{option.label}</button>)}
+            </div>
+            {rainError && <p className="rain-forecast-error" role="alert"><AlertTriangle size={14} />{rainError}<button type="button" onClick={() => { setRainForecast(null); setRainError(""); setRainRetryToken((token) => token + 1); }}>ลองใหม่</button></p>}
+            {rainForecast && <>
+              <div className="rain-forecast-scale" aria-label="ปริมาณฝนคาดการณ์ หน่วยมิลลิเมตรในหนึ่งชั่วโมง">
+                <strong>ฝน (มม./ชม.)</strong>
+                <span><i className="rain-scale-light" />0.2–1</span>
+                <span><i className="rain-scale-medium" />1–2.5</span>
+                <span><i className="rain-scale-heavy" />2.5–7.5</span>
+                <span><i className="rain-scale-intense" />7.5–15</span>
+                <span><i className="rain-scale-extreme" />15+</span>
+              </div>
+              <p className="rain-forecast-note">ปริมาณฝนพยากรณ์รายชั่วโมง · อัปเดตข้อมูล {forecastUpdatedLabel} น. · <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (CC BY 4.0) · ไม่ใช่ระดับน้ำท่วม</p>
+            </>}
+          </>}
+        </section>
+      </div>
+      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} className="full-map" /></div>
       <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานในรัศมี 36 ชั่วโมง</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่รายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span></div>
     </div>
   );
@@ -385,7 +465,7 @@ function CctvView({ onNavigate }: { onNavigate: (view: View) => void }) {
           <div className="camera-stage">{selected.feedUrl && <div className="camera-live-feed">{selected.feedType === "hls" ? <CameraHlsFeed src={selected.feedUrl} title={`CCTV ${selected.name}`} onStatus={updateFeedStatus} /> : selected.feedType === "image" ? <Image src={selected.feedUrl} alt={`ภาพ CCTV ${selected.name}`} fill unoptimized sizes="(max-width: 900px) 100vw, 60vw" onLoad={() => updateFeedStatus("live")} onError={() => updateFeedStatus("offline")} /> : <iframe src={selected.feedUrl} title={`CCTV ${selected.name}`} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen onLoad={() => updateFeedStatus("live")} />}</div>}<div className="camera-grid-lines" /><div className="camera-stage-top"><span><Radio size={14} /> CCTV · {selected.name}</span><span className={`feed-unavailable${feedStatus === "live" ? " feed-live" : ""}`}><i />{!selected.feedUrl ? "ยังไม่มีสัญญาณภาพ" : feedStatus === "live" ? "กำลังรับภาพ" : feedStatus === "loading" ? "กำลังเชื่อมต่อภาพ" : "สัญญาณภาพขัดข้อง"}</span></div>{!selected.feedUrl && <div className="camera-placeholder"><div className="camera-orbit"><Camera size={37} strokeWidth={1.4} /></div><h2>ยังไม่มีภาพถ่ายทอดสด</h2><p>จุดนี้เป็นรายการตัวอย่าง<br />เพิ่ม URL จากหน่วยงานเพื่อแสดงภาพ</p><span className="camera-location-tag"><MapPin size={13} />{selected.name} · {selected.road}</span></div>}<div className="camera-stage-bottom"><span>{selected.district} · {selected.subdistrict}</span><span>{selected.coordinates[0].toFixed(4)}° N · {selected.coordinates[1].toFixed(4)}° E</span></div></div>
           <div className="camera-stage-caption"><span><ShieldAlert size={15} />{selected.feedUrl ? `ภาพจาก ${selected.sourceLabel ?? "แหล่งสาธารณะ"}` : "กล้องตัวอย่างยังไม่มีภาพถ่ายทอดสด"}</span>{selected.sourceUrl ? <a className="text-link" href={selected.sourceUrl} target="_blank" rel="noreferrer">เปิดต้นทาง <ExternalLink size={14} /></a> : <button className="text-link" onClick={() => onNavigate("report")}>รายงานจากจุดนี้ <ArrowRight size={14} /></button>}</div>
         </section>
-      <section className="camera-list-panel"><div className="camera-list-heading"><div><h2>ค้นหาจุดกล้อง</h2><p>{filtered.length} จุดในรายการ</p></div><span className="camera-total-icon"><Camera size={17} /></span></div><div className="camera-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาถนน / จุดสำคัญ" aria-label="ค้นหาชื่อถนนหรือจุดกล้อง" />{query && <button onClick={() => setQuery("")} aria-label="ล้างการค้นหา"><X size={15} /></button>}</div><div className="select-wrap camera-district-select"><select value={district} onChange={(event) => setDistrict(event.target.value)} aria-label="กรองกล้องตามอำเภอ"><option>ทุกอำเภอ</option>{districts.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={15} /></div><div className="camera-list">{filtered.map((camera, index) => <button key={camera.id} className={`camera-list-item${selected.id === camera.id ? " selected" : ""}`} onClick={() => setSelected(camera)}><span className="camera-number">{String(index + 1).padStart(2, "0")}</span><span className="camera-item-main"><b>{camera.name}</b><small>{camera.road} · {camera.subdistrict}</small></span><span className={`camera-unavailable-dot${camera.feedUrl ? " is-live" : ""}`} title={camera.feedUrl ? "มีฟีดสาธารณะ" : "ยังไม่ได้เชื่อมต่อภาพ"} /><ChevronRight size={16} /></button>)}{filtered.length === 0 && <div className="empty-state small-empty"><Search size={20} /><p>ไม่พบจุดที่ค้นหา</p><button className="text-link" onClick={() => { setQuery(""); setDistrict("ทุกอำเภอ"); }}>ล้างตัวกรอง</button></div>}</div><p className="camera-source-note"><Info size={13} />จุดสีเขียวมีฟีดสาธารณะ · สีเหลืองเป็นจุดตัวอย่าง</p></section>
+       <section className="camera-list-panel"><div className="camera-list-heading"><div><h2>ค้นหาจุดกล้อง</h2><p>{filtered.length} จุดในรายการ</p></div><span className="camera-total-icon"><Camera size={17} /></span></div><div className="camera-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาถนน / จุดสำคัญ" aria-label="ค้นหาชื่อถนนหรือจุดกล้อง" />{query && <button onClick={() => setQuery("")} aria-label="ล้างการค้นหา"><X size={15} /></button>}</div><div className="select-wrap camera-district-select"><select value={district} onChange={(event) => setDistrict(event.target.value)} aria-label="กรองกล้องตามอำเภอ"><option>ทุกอำเภอ</option>{districts.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={15} /></div><div className="camera-list">{filtered.map((camera, index) => <button key={camera.id} className={`camera-list-item${selected.id === camera.id ? " selected" : ""}`} onClick={() => setSelected(camera)}><span className="camera-number">{String(index + 1).padStart(2, "0")}</span><span className="camera-item-main"><b>{camera.name}</b><small>{camera.road} · {camera.subdistrict}</small></span><span className={`camera-unavailable-dot${camera.feedUrl ? " is-live" : ""}`} title={camera.feedUrl ? "มีฟีดสาธารณะ" : "ยังไม่ได้เชื่อมต่อภาพ"} /><ChevronRight size={16} /></button>)}{filtered.length === 0 && <div className="empty-state small-empty"><Search size={20} /><p>ไม่พบจุดที่ค้นหา</p><button className="text-link" onClick={() => { setQuery(""); setDistrict("ทุกอำเภอ"); }}>ล้างตัวกรอง</button></div>}</div><p className="camera-source-note"><Info size={13} />กล้องในรายการนี้มีฟีดสาธารณะ</p></section>
       </div>
     </div>
   );

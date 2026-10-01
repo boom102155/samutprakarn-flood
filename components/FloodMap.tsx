@@ -7,6 +7,8 @@ import L from "leaflet";
 import { Check, Flag, MapPin, Navigation, X } from "lucide-react";
 import { FloodReport, levelColors, reportFlags, severityLabel } from "@/lib/types";
 import { formatThaiDate, timeAgo } from "@/lib/useFloodReports";
+import { RainMapPoint } from "@/lib/rainForecast";
+import RainForecastOverlay from "@/components/RainForecastOverlay";
 import samutPrakanBoundary from "@/lib/samut-prakan-boundary.json";
 
 const center: [number, number] = [13.607, 100.66];
@@ -14,6 +16,10 @@ const provinceRing: [number, number][] = samutPrakanBoundary.geometry.coordinate
   ([longitude, latitude]) => [latitude, longitude] as [number, number],
 );
 const provinceBounds = L.latLngBounds(provinceRing);
+const provinceImageBounds: [[number, number], [number, number]] = [
+  [provinceBounds.getSouth(), provinceBounds.getWest()],
+  [provinceBounds.getNorth(), provinceBounds.getEast()],
+];
 
 interface FloodMapProps {
   reports: FloodReport[];
@@ -25,6 +31,7 @@ interface FloodMapProps {
   pickMode?: boolean;
   pickedPosition?: [number, number] | null;
   onMapPick?: (position: [number, number]) => void;
+  rainForecastPoints?: RainMapPoint[];
   className?: string;
 }
 
@@ -145,6 +152,7 @@ export default function FloodMap(props: FloodMapProps) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        {props.rainForecastPoints && <RainForecastOverlay points={props.rainForecastPoints} bounds={provinceImageBounds} />}
         <ProvinceHighlight />
         <MapCamera selectedId={props.selectedId} reports={props.reports} />
         <MapPickHandler enabled={Boolean(props.pickMode)} onPick={props.onMapPick} />
