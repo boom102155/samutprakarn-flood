@@ -29,7 +29,7 @@ People may use the site on a phone while checking a flooded area or while planni
 - Public report data should synchronize across visitors in real time using a hosted backend.
 - The site includes current reports, a report map, district/subdistrict filtering, CCTV discovery, and emergency contacts.
 - Production Supabase credentials were not provided and must be configured before cross-user live reports are available.
-- Two public Highway Department HLS camera feeds near Bang Na–Bang Pakong km 6 are configured through Longdo Traffic; other CCTV location entries remain sample locations until verified feeds are supplied.
+- The currently verified public CCTV feeds in the Longdo Traffic camera directory for Samut Prakan are two Highway Department HLS cameras near Bang Na–Bang Pakong km 6, one in each direction. Unverified or non-public CCTV locations are excluded from the public-facing list.
 - Initial illustrative flood reports must be identified as sample/demo content until replaced with live reports.
 
 ## Brand Commitments
@@ -38,7 +38,7 @@ Thai-language experience with blue as the primary visual theme; modern, clear, a
 
 ## Evidence on Hand
 
-Emergency contact names and numbers are supplied in the original product brief. Two public CCTV HLS feeds from the Highway Department are linked through Longdo Traffic; no production incident feed or Supabase project credentials were provided, and the initial map reports are still sample content.
+Emergency contact names and numbers are supplied in the original product brief. The two currently listed public CCTV HLS feeds from the Highway Department are linked through Longdo Traffic; the Samut Prakan provincial CCTV page provides policy documents rather than public live streams. No production incident feed or Supabase project credentials were provided, and the initial map reports are still sample content.
 
 ## Product Principles
 
