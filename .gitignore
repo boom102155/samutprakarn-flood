@@ -6,4 +6,3 @@ node_modules/
 !.env.example
 *.tsbuildinfo
 npm-debug.log*
-samutprakarn-flood/

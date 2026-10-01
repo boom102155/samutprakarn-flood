@@ -100,7 +100,7 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
   const [showFlags, setShowFlags] = useState(false);
   const [sentFlag, setSentFlag] = useState("");
   return (
-    <div className="map-popup">
+    <div className="map-popup" onClick={(event) => event.stopPropagation()}>
       <div className="popup-heading-row">
         <span className="popup-level-dot" style={{ background: levelColors[report.waterLevel] }} />
         <strong>{severityLabel(report.waterLevel)}</strong>
@@ -120,12 +120,12 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
       </div>
       <div className="popup-divider" />
       {!showFlags ? (
-        <button type="button" className="flag-toggle" onClick={() => setShowFlags(true)}><Flag size={14} /> แจ้งข้อมูลไม่ถูกต้อง</button>
+        <button type="button" className="flag-toggle" onClick={(event) => { event.stopPropagation(); setShowFlags(true); }}><Flag size={14} /> แจ้งข้อมูลไม่ถูกต้อง</button>
       ) : (
         <div className="popup-flag-list">
-          <div className="flag-list-head"><span>เลือกเหตุผลที่แจ้ง</span><button type="button" aria-label="ปิดตัวเลือก" onClick={() => setShowFlags(false)}><X size={14} /></button></div>
+          <div className="flag-list-head"><span>เลือกเหตุผลที่แจ้ง</span><button type="button" aria-label="ปิดตัวเลือก" onClick={(event) => { event.stopPropagation(); setShowFlags(false); }}><X size={14} /></button></div>
           {reportFlags.map((reason) => (
-            <button key={reason} type="button" className="flag-reason" onClick={() => { props.onFlag?.(report.id, reason); setSentFlag(reason); }}>
+            <button key={reason} type="button" className="flag-reason" onClick={(event) => { event.stopPropagation(); props.onFlag?.(report.id, reason); setSentFlag(reason); }}>
               {sentFlag === reason ? <Check size={13} /> : <Flag size={13} />}{reason}
             </button>
           ))}
