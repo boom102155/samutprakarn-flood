@@ -9,8 +9,8 @@ interface RainForecastOverlayProps {
   bounds: [[number, number], [number, number]];
 }
 
-function rainColor(amount: number): [number, number, number, number] | null {
-  if (amount < 0.2) return null;
+function rainColor(amount: number): [number, number, number, number] {
+  if (amount < 0.2) return [226, 242, 250, 54];
   if (amount < 1) return [125, 211, 252, 90];
   if (amount < 2.5) return [56, 189, 248, 112];
   if (amount < 7.5) return [37, 99, 235, 145];
@@ -55,7 +55,6 @@ function createRainImage(points: RainMapPoint[], bounds: RainForecastOverlayProp
 
       const amount = exactRain ?? (totalWeight ? weightedRain / totalWeight : 0);
       const color = rainColor(amount);
-      if (!color) continue;
       const offset = (y * size + x) * 4;
       image.data[offset] = color[0];
       image.data[offset + 1] = color[1];

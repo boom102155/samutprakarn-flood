@@ -381,10 +381,17 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
     longitude: point.longitude,
     precipitation: point.precipitation[forecastIndex] ?? null,
   })) ?? [], [rainForecast, forecastIndex]);
+  const forecastRainValues = rainMapPoints.flatMap((point) => point.precipitation === null ? [] : [point.precipitation]);
+  const maximumRain = forecastRainValues.length ? Math.max(...forecastRainValues) : null;
   const forecastTime = rainForecast?.times[forecastIndex];
   const forecastTimeLabel = forecastTime
     ? new Intl.DateTimeFormat("th-TH", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(forecastTime))
     : "";
+  const forecastStatusLabel = maximumRain === null
+    ? "ยังไม่มีค่าพยากรณ์ฝน"
+    : maximumRain < 0.2
+      ? maximumRain === 0 ? "ไม่คาดการณ์ฝน" : "ฝนน้อยกว่า 0.2 มม./ชม."
+      : `ฝนสูงสุด ${maximumRain.toLocaleString("th-TH", { maximumFractionDigits: 1 })} มม./ชม.`;
   const forecastUpdatedLabel = rainForecast
     ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(rainForecast.generatedAt))
     : "";
@@ -402,7 +409,7 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
               <span><strong>พยากรณ์ฝน</strong><small>{rainEnabled ? "เปิดชั้นฝนบนแผนที่" : "เลือกเวลาเพื่อดูฝนคาดการณ์"}</small></span>
               <i className="rain-toggle-indicator" />
             </button>
-            {rainEnabled && <span className="rain-forecast-status">{rainLoading ? <><span className="spinner" />กำลังโหลดพยากรณ์…</> : rainError ? "โหลดข้อมูลไม่สำเร็จ" : forecastTimeLabel ? `มีผล ${forecastTimeLabel}` : "เตรียมข้อมูลพยากรณ์"}</span>}
+            {rainEnabled && <span className="rain-forecast-status">{rainLoading ? <><span className="spinner" />กำลังโหลดพยากรณ์…</> : rainError ? "โหลดข้อมูลไม่สำเร็จ" : forecastTimeLabel ? <>{forecastStatusLabel} · {forecastTimeLabel}</> : "เตรียมข้อมูลพยากรณ์"}</span>}
           </div>
           {rainEnabled && <>
             <div className="rain-time-options" role="group" aria-label="เลือกเวลาพยากรณ์ฝน">
@@ -412,6 +419,7 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
             {rainForecast && <>
               <div className="rain-forecast-scale" aria-label="ปริมาณฝนคาดการณ์ หน่วยมิลลิเมตรในหนึ่งชั่วโมง">
                 <strong>ฝน (มม./ชม.)</strong>
+                <span><i className="rain-scale-dry" />0–0.2</span>
                 <span><i className="rain-scale-light" />0.2–1</span>
                 <span><i className="rain-scale-medium" />1–2.5</span>
                 <span><i className="rain-scale-heavy" />2.5–7.5</span>
