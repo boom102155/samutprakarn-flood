@@ -28,8 +28,9 @@ People may use the site on a phone while checking a flooded area or while planni
 - Reports can be confirmed as still flooded or receded; users can flag inaccurate or stale information.
 - Public report data should synchronize across visitors in real time using a hosted backend.
 - The site includes current reports, a report map, district/subdistrict filtering, CCTV discovery, and emergency contacts.
-- Real CCTV stream URLs and production Supabase credentials were not provided and must be configured before live service data and feeds are available.
-- Initial illustrative reports and CCTV listings must be identified as sample/demo content until replaced with verified live sources.
+- Production Supabase credentials were not provided and must be configured before cross-user live reports are available.
+- Two public Highway Department HLS camera feeds near Bang Na–Bang Pakong km 6 are configured through Longdo Traffic; other CCTV location entries remain sample locations until verified feeds are supplied.
+- Initial illustrative flood reports must be identified as sample/demo content until replaced with live reports.
 
 ## Brand Commitments
 
@@ -37,7 +38,7 @@ Thai-language experience with blue as the primary visual theme; modern, clear, a
 
 ## Evidence on Hand
 
-Emergency contact names and numbers are supplied in the original product brief. No live CCTV stream URLs, production incident feed, or Supabase project credentials were provided; CCTV entries and initial map reports are labeled sample content until replaced with verified sources.
+Emergency contact names and numbers are supplied in the original product brief. Two public CCTV HLS feeds from the Highway Department are linked through Longdo Traffic; no production incident feed or Supabase project credentials were provided, and the initial map reports are still sample content.
 
 ## Product Principles
 
