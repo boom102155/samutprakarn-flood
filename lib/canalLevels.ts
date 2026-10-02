@@ -13,6 +13,7 @@ export interface CanalStation {
   outerLevel: number | null;
   condition: CanalCondition;
   conditionLabel: string;
+  statusIsDerived?: boolean;
   warningLevel: number | null;
   criticalLevel: number | null;
   outsideWarningLevel: number | null;
@@ -54,3 +55,5 @@ export const relevantCanalStationIds = [
   39, 40, 42, 48, 49, 50, 64, 65, 66, 130, 131, 132, 135, 173, 174, 191,
   200, 201, 202, 204, 205, 206, 262, 263, 277, 279, 289, 298, 309, 317,
 ] as const;
+
+export type CanalDataSource = "bma-map" | "station-details";

@@ -16,7 +16,7 @@ import {
 import { timeAgo, useFloodReports } from "@/lib/useFloodReports";
 import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
 import { canalConditionColors, canalConditionLabels, canalSourceUrl } from "@/lib/canalLevels";
-import type { CanalHistory, CanalStation } from "@/lib/canalLevels";
+import type { CanalDataSource, CanalHistory, CanalStation } from "@/lib/canalLevels";
 import CameraHlsFeed, { CameraFeedStatus } from "@/components/CameraHlsFeed";
 import type { CanalHistoryState } from "@/components/FloodMap";
 
@@ -351,6 +351,7 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
   const [rainRetryToken, setRainRetryToken] = useState(0);
   const [canalLayerEnabled, setCanalLayerEnabled] = useState(true);
   const [canalStations, setCanalStations] = useState<CanalStation[]>([]);
+  const [canalDataSource, setCanalDataSource] = useState<CanalDataSource>("bma-map");
   const [canalGeneratedAt, setCanalGeneratedAt] = useState("");
   const [canalLoading, setCanalLoading] = useState(true);
   const [canalError, setCanalError] = useState("");
@@ -366,10 +367,11 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
 
     void fetch("/api/canal-levels", { signal: controller.signal })
       .then(async (response) => {
-        const result = await response.json() as { stations?: CanalStation[]; generatedAt?: string; error?: string };
+        const result = await response.json() as { stations?: CanalStation[]; generatedAt?: string; source?: CanalDataSource; error?: string };
         if (!response.ok) throw new Error(result.error || "โหลดข้อมูลคลองไม่สำเร็จ");
         setCanalStations(result.stations ?? []);
         setCanalGeneratedAt(result.generatedAt ?? "");
+        setCanalDataSource(result.source ?? "bma-map");
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setCanalError(error instanceof Error ? error.message : "โหลดข้อมูลคลองไม่สำเร็จ");
@@ -510,7 +512,7 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
               <div className="canal-status-legend" aria-label="สถานะสถานีคลอง">
                 {canalStatusCounts.map(({ condition, count }) => <span key={condition}><i style={{ backgroundColor: canalConditionColors[condition] }} />{canalConditionLabels[condition]}<b>{count}</b></span>)}
               </div>
-              <p className="canal-data-attribution">สีแสดงสถานะจากเกณฑ์สถานี · ระดับเป็น ม.รทก. · <a href={canalSourceUrl} target="_blank" rel="noreferrer">สำนักการระบายน้ำ กทม.</a></p>
+              <p className="canal-data-attribution">{canalDataSource === "station-details" ? "ใช้หน้ารายละเอียดสถานีสำรอง · สถานะคำนวณเทียบเกณฑ์เตือน/วิกฤตของสถานี" : "สีแสดงสถานะจากเกณฑ์สถานี"} · ระดับเป็น ม.รทก. · <a href={canalSourceUrl} target="_blank" rel="noreferrer">สำนักการระบายน้ำ กทม.</a></p>
             </>
           )}
         </section>

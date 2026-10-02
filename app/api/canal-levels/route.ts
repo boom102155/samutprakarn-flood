@@ -8,6 +8,7 @@ import {
 export const revalidate = 300;
 
 const sourceUrl = "https://weather.bangkok.go.th/water/PageMap/GoogleMap";
+const stationDetailUrl = "https://weather.bangkok.go.th/water/StationDetail";
 const stationIds = new Set<number>(relevantCanalStationIds);
 
 interface BmaStation {
@@ -79,7 +80,113 @@ function mapStation(row: BmaStation): CanalStation | null {
   };
 }
 
+function htmlText(value: string) {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;|&#160;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inputValue(html: string, id: string) {
+  const tag = html.match(new RegExp(`<input\\b[^>]*id=["']${id}["'][^>]*>`, "i"))?.[0];
+  const value = tag?.match(/\bvalue=["']([^"']*)["']/i)?.[1];
+  return value ? htmlText(value) : "";
+}
+
+function stationDetailFallback(html: string, id: number): CanalStation | null {
+  const stationOption = html.match(new RegExp(`<option\\b[^>]*value=["']${id}["'][^>]*>([\\s\\S]*?)<\\/option>`, "i"))?.[1];
+  const location = stationOption ? htmlText(stationOption) : "";
+  const separator = location.indexOf(":");
+  const marker = html.match(/L\.marker\(\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i);
+  const table = html.match(/<table\b[^>]*id=["']example["'][^>]*>([\s\S]*?)<\/table>/i)?.[1];
+  const readings = table ? [...table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].flatMap(([, row]) => {
+    const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(([, cell]) => htmlText(cell));
+    if (cells.length < 3) return [];
+    const observedAt = parseBangkokTimestamp(cells[1]);
+    const waterLevel = Number(cells[2].replace(/,/g, ""));
+    return observedAt && Number.isFinite(waterLevel) ? [{ observedAt, waterLevel }] : [];
+  }) : [];
+  const current = readings.at(-1);
+  if (!marker || !current) return null;
+
+  const warningText = inputValue(html, "txt_warning");
+  const criticalText = inputValue(html, "txt_critical");
+  const warningLevel = warningText && warningText !== "-" ? numberOrNull(Number(warningText)) : null;
+  const criticalLevel = criticalText && criticalText !== "-" ? numberOrNull(Number(criticalText)) : null;
+  const condition = warningLevel === null && criticalLevel === null
+    ? "offline"
+    : criticalLevel !== null && current.waterLevel >= criticalLevel
+      ? "critical"
+      : warningLevel !== null && current.waterLevel >= warningLevel
+        ? "warning"
+        : "normal";
+  const conditionLabel = condition === "critical"
+    ? "วิกฤต · เทียบเกณฑ์สถานี"
+    : condition === "warning"
+      ? "เตือนภัย · เทียบเกณฑ์สถานี"
+      : condition === "normal"
+        ? "ปกติ · เทียบเกณฑ์สถานี"
+        : canalConditionLabels[condition];
+  const stationName = location.slice(separator + 1).trim() || inputValue(html, "txt_water_shortname") || "สถานีวัดระดับน้ำ";
+
+  return {
+    id: String(id),
+    code: inputValue(html, "txt_water_code") || `WL.${id}`,
+    canalName: separator > 0 ? location.slice(0, separator).trim() : inputValue(html, "txt_water_name") || "คลองไม่ระบุชื่อ",
+    stationName,
+    district: "",
+    latitude: Number(marker[1]),
+    longitude: Number(marker[2]),
+    waterLevel: current.waterLevel,
+    outsideLevel: null,
+    outerLevel: null,
+    condition,
+    conditionLabel,
+    statusIsDerived: true,
+    warningLevel,
+    criticalLevel,
+    outsideWarningLevel: null,
+    outsideCriticalLevel: null,
+    observedAt: current.observedAt,
+  };
+}
+
+async function fallbackStation(id: number) {
+  try {
+    const response = await fetch(`${stationDetailUrl}?id=${id}`, {
+      next: { revalidate },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!response.ok) return null;
+    return stationDetailFallback(await response.text(), id);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchStationDetailFallback() {
+  const ids = [...relevantCanalStationIds];
+  const stations: CanalStation[] = [];
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(8, ids.length) }, async () => {
+    while (nextIndex < ids.length) {
+      const id = ids[nextIndex++];
+      const station = await fallbackStation(id);
+      if (station) stations.push(station);
+    }
+  });
+  await Promise.all(workers);
+  return stations;
+}
+
 export async function GET() {
+  let upstreamStatus = "ไม่ทราบสถานะ";
   try {
     const response = await fetch(sourceUrl, {
       method: "POST",
@@ -89,18 +196,24 @@ export async function GET() {
       signal: AbortSignal.timeout(15_000),
     });
 
-    if (!response.ok) {
-      return Response.json({ error: "ระบบตรวจวัดระดับน้ำ กทม. ตอบกลับไม่สำเร็จ" }, { status: 502 });
+    if (response.ok) {
+      const rows = await response.json() as BmaStation[];
+      const stations = rows.map(mapStation).filter((station): station is CanalStation => station !== null);
+      if (stations.length) {
+        return Response.json({ generatedAt: new Date().toISOString(), source: "bma-map", stations });
+      }
+      upstreamStatus = "ไม่พบสถานีในข้อมูลแผนที่";
+    } else {
+      upstreamStatus = `HTTP ${response.status}`;
     }
-
-    const rows = await response.json() as BmaStation[];
-    const stations = rows.map(mapStation).filter((station): station is CanalStation => station !== null);
-    if (!stations.length) {
-      return Response.json({ error: "ไม่พบข้อมูลสถานีคลองในพื้นที่ใกล้เคียง" }, { status: 502 });
-    }
-
-    return Response.json({ generatedAt: new Date().toISOString(), stations });
   } catch {
-    return Response.json({ error: "เชื่อมต่อข้อมูลสถานีคลองไม่สำเร็จ โปรดลองอีกครั้ง" }, { status: 502 });
+    upstreamStatus = "เชื่อมต่อฟีดแผนที่ไม่สำเร็จ";
   }
+
+  const stations = await fetchStationDetailFallback();
+  if (stations.length) {
+    return Response.json({ generatedAt: new Date().toISOString(), source: "station-details", stations });
+  }
+
+  return Response.json({ error: `ข้อมูลสถานีคลอง กทม. ยังใช้งานไม่ได้ (${upstreamStatus}) โปรดลองใหม่` }, { status: 502 });
 }
