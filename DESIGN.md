@@ -220,6 +220,8 @@ Six ivory report slides sit within an inset navy panel. Each slide exposes its s
 ### Flood Map Marker
 The map uses filled circular severity dots with a dark outline, matching the report colors. The selected province remains bright within its red boundary while the surrounding map is dimmed. Older reports fade, and a dashed circle distinguishes a report marked receded.
 
+Official canal-monitoring stations use white-centered rings with the provider's normal, warning, critical, and offline colors, keeping them visually distinct from community flood reports. Station details retain the official status, level unit (m MSL), observation time, and link to the source; history changes use directional marks and never invent missing periods.
+
 ### Report Row
 Rows begin with a small severity dot, then location and area; severity and elapsed time align at the trailing edge. Dividers and generous row height keep dense local reports separable.
 

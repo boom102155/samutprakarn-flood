@@ -2,12 +2,12 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck,
   Camera, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, CloudRain,
-  Crosshair, ExternalLink, Home, Info, Map, MapPin, Phone, Plus, Radio, Search, Send, ShieldAlert, Upload, Waves, X,
+  Crosshair, ExternalLink, Home, Info, Map, MapPin, Phone, Plus, Radio, RefreshCw, Search, Send, ShieldAlert, Upload, Waves, X,
 } from "lucide-react";
 import {
   districts, FloodReport, levelColors, NewFloodReport, severityLabel,
@@ -15,7 +15,10 @@ import {
 } from "@/lib/types";
 import { timeAgo, useFloodReports } from "@/lib/useFloodReports";
 import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
+import { canalConditionColors, canalConditionLabels, canalSourceUrl } from "@/lib/canalLevels";
+import type { CanalHistory, CanalStation } from "@/lib/canalLevels";
 import CameraHlsFeed, { CameraFeedStatus } from "@/components/CameraHlsFeed";
+import type { CanalHistoryState } from "@/components/FloodMap";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), {
   ssr: false,
@@ -346,6 +349,57 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
   const [rainForecast, setRainForecast] = useState<RainForecastData | null>(null);
   const [forecastHours, setForecastHours] = useState(1);
   const [rainRetryToken, setRainRetryToken] = useState(0);
+  const [canalLayerEnabled, setCanalLayerEnabled] = useState(true);
+  const [canalStations, setCanalStations] = useState<CanalStation[]>([]);
+  const [canalGeneratedAt, setCanalGeneratedAt] = useState("");
+  const [canalLoading, setCanalLoading] = useState(true);
+  const [canalError, setCanalError] = useState("");
+  const [canalRetryToken, setCanalRetryToken] = useState(0);
+  const [selectedCanalId, setSelectedCanalId] = useState<string | null>(null);
+  const [canalHistoryById, setCanalHistoryById] = useState<Record<string, CanalHistoryState>>({});
+  const canalHistoryRequests = useRef(new Set<string>());
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setCanalLoading(true);
+    setCanalError("");
+
+    void fetch("/api/canal-levels", { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as { stations?: CanalStation[]; generatedAt?: string; error?: string };
+        if (!response.ok) throw new Error(result.error || "โหลดข้อมูลคลองไม่สำเร็จ");
+        setCanalStations(result.stations ?? []);
+        setCanalGeneratedAt(result.generatedAt ?? "");
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setCanalError(error instanceof Error ? error.message : "โหลดข้อมูลคลองไม่สำเร็จ");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCanalLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [canalRetryToken]);
+
+  const loadCanalHistory = useCallback((stationId: string) => {
+    if (canalHistoryRequests.current.has(stationId) || canalHistoryById[stationId]?.data) return;
+    canalHistoryRequests.current.add(stationId);
+    setCanalHistoryById((current) => ({ ...current, [stationId]: { loading: true } }));
+
+    void fetch(`/api/canal-levels/history?stationId=${encodeURIComponent(stationId)}`)
+      .then(async (response) => {
+        const result = await response.json() as CanalHistory & { error?: string };
+        if (!response.ok) throw new Error(result.error || "โหลดข้อมูลย้อนหลังไม่สำเร็จ");
+        setCanalHistoryById((current) => ({ ...current, [stationId]: { loading: false, data: result } }));
+      })
+      .catch((error: unknown) => {
+        setCanalHistoryById((current) => ({
+          ...current,
+          [stationId]: { loading: false, error: error instanceof Error ? error.message : "โหลดข้อมูลย้อนหลังไม่สำเร็จ" },
+        }));
+      })
+      .finally(() => canalHistoryRequests.current.delete(stationId));
+  }, [canalHistoryById]);
 
   useEffect(() => {
     if (!rainEnabled || rainForecast) return;
@@ -395,6 +449,13 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
   const forecastUpdatedLabel = rainForecast
     ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(rainForecast.generatedAt))
     : "";
+  const canalUpdatedLabel = canalGeneratedAt
+    ? new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(canalGeneratedAt))
+    : "";
+  const canalStatusCounts = (Object.keys(canalConditionLabels) as (keyof typeof canalConditionLabels)[]).map((condition) => ({
+    condition,
+    count: canalStations.filter((station) => station.condition === condition).length,
+  }));
 
   return (
     <div className="content-page map-page">
@@ -430,9 +491,32 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
             </>}
           </>}
         </section>
+        <section className={`canal-station-control${canalLayerEnabled ? " is-enabled" : ""}`} aria-label="ชั้นข้อมูลสถานีวัดระดับน้ำในคลอง">
+          <div className="canal-station-heading">
+            <button type="button" className="canal-layer-toggle" aria-pressed={canalLayerEnabled} onClick={() => { setCanalLayerEnabled((enabled) => !enabled); if (canalLayerEnabled) setSelectedCanalId(null); }}>
+              <Waves size={19} />
+              <span><strong>คลองและสถานีวัดระดับน้ำ</strong><small>{canalLoading ? "กำลังโหลดข้อมูลจากสำนักการระบายน้ำ กทม.…" : `${canalStations.length} สถานี · สถานะตามเกณฑ์ของแต่ละสถานี`}</small></span>
+              <i className="canal-toggle-indicator" />
+            </button>
+            <div className="canal-data-meta">
+              {canalUpdatedLabel && <span>{canalUpdatedLabel} น.</span>}
+              <button type="button" onClick={() => setCanalRetryToken((token) => token + 1)} disabled={canalLoading} aria-label="โหลดข้อมูลคลองล่าสุด" title="โหลดข้อมูลคลองล่าสุด"><RefreshCw size={15} className={canalLoading ? "is-spinning" : ""} /></button>
+            </div>
+          </div>
+          {canalError ? (
+            <p className="canal-data-error" role="alert">{canalError}<button type="button" onClick={() => setCanalRetryToken((token) => token + 1)}>ลองใหม่</button></p>
+          ) : (
+            <>
+              <div className="canal-status-legend" aria-label="สถานะสถานีคลอง">
+                {canalStatusCounts.map(({ condition, count }) => <span key={condition}><i style={{ backgroundColor: canalConditionColors[condition] }} />{canalConditionLabels[condition]}<b>{count}</b></span>)}
+              </div>
+              <p className="canal-data-attribution">สีแสดงสถานะจากเกณฑ์สถานี · ระดับเป็น ม.รทก. · <a href={canalSourceUrl} target="_blank" rel="noreferrer">สำนักการระบายน้ำ กทม.</a></p>
+            </>
+          )}
+        </section>
       </div>
-      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} className="full-map" /></div>
-      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานในรัศมี 36 ชั่วโมง</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่รายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span></div>
+      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} canalStations={canalLayerEnabled ? canalStations : undefined} selectedCanalId={selectedCanalId} canalHistoryById={canalHistoryById} onCanalSelect={(station) => { setSelectedCanalId(station.id); loadCanalHistory(station.id); }} onCanalHistoryRetry={(stationId) => { setCanalHistoryById((current) => ({ ...current, [stationId]: { loading: false } })); loadCanalHistory(stationId); }} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} className="full-map" /></div>
+      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานในรัศมี 36 ชั่วโมง</span><span><Waves size={15} /> {canalLayerEnabled ? canalStations.length : 0} สถานีคลองใกล้เคียง</span><span><Clock3 size={15} /> ทุกจุดมีเวลาอัปเดตจากสถานี</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span></div>
     </div>
   );
 }
