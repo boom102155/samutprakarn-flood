@@ -10,6 +10,14 @@ export const revalidate = 300;
 const sourceUrl = "https://weather.bangkok.go.th/water/PageMap/GoogleMap";
 const stationDetailUrl = "https://weather.bangkok.go.th/water/StationDetail";
 const stationIds = new Set<number>(relevantCanalStationIds);
+const bmaBrowserHeaders = {
+  Accept: "application/json, text/javascript, */*; q=0.01",
+  "Accept-Language": "th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7",
+  Origin: "https://weather.bangkok.go.th",
+  Referer: "https://weather.bangkok.go.th/water/",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "X-Requested-With": "XMLHttpRequest",
+};
 
 interface BmaStation {
   water_id?: number;
@@ -160,6 +168,10 @@ function stationDetailFallback(html: string, id: number): CanalStation | null {
 async function fallbackStation(id: number) {
   try {
     const response = await fetch(`${stationDetailUrl}?id=${id}`, {
+      headers: {
+        ...bmaBrowserHeaders,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
       next: { revalidate },
       signal: AbortSignal.timeout(12_000),
     });
@@ -190,7 +202,7 @@ export async function GET() {
   try {
     const response = await fetch(sourceUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      headers: { ...bmaBrowserHeaders, "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
       body: new URLSearchParams({ payload: "TEST_DATA_GOES_HERE" }),
       next: { revalidate },
       signal: AbortSignal.timeout(15_000),
