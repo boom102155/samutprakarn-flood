@@ -1,5 +1,7 @@
 import { CanalHistory, CanalReading, relevantCanalStationIds } from "@/lib/canalLevels";
 
+export const dynamic = "force-dynamic";
+
 const stationIds = new Set<number>(relevantCanalStationIds);
 const sourceUrl = "https://weather.bangkok.go.th/water/StationDetail";
 const bmaBrowserHeaders = {
@@ -57,11 +59,11 @@ export async function GET(request: Request) {
   try {
     const response = await fetch(`${sourceUrl}?id=${stationId}`, {
       headers: bmaBrowserHeaders,
-      next: { revalidate: 300 },
+      cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) {
-      return Response.json({ error: "โหลดข้อมูลย้อนหลังจากสถานีไม่สำเร็จ" }, { status: 502 });
+      return Response.json({ error: "โหลดข้อมูลย้อนหลังจากสถานีไม่สำเร็จ" }, { status: 502, headers: { "Cache-Control": "no-store" } });
     }
 
     const readings = parseReadings(await response.text());
@@ -71,8 +73,8 @@ export async function GET(request: Request) {
       earliestAt: readings[0]?.observedAt ?? null,
       latestAt: readings.at(-1)?.observedAt ?? null,
     };
-    return Response.json(result);
+    return Response.json(result, { headers: { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=60" } });
   } catch {
-    return Response.json({ error: "เชื่อมต่อประวัติระดับน้ำไม่สำเร็จ โปรดลองอีกครั้ง" }, { status: 502 });
+    return Response.json({ error: "เชื่อมต่อประวัติระดับน้ำไม่สำเร็จ โปรดลองอีกครั้ง" }, { status: 502, headers: { "Cache-Control": "no-store" } });
   }
 }

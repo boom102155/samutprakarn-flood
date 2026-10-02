@@ -5,7 +5,7 @@ import {
   relevantCanalStationIds,
 } from "@/lib/canalLevels";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 const sourceUrl = "https://weather.bangkok.go.th/water/PageMap/GoogleMap";
 const stationDetailUrl = "https://weather.bangkok.go.th/water/StationDetail";
@@ -18,6 +18,23 @@ const bmaBrowserHeaders = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   "X-Requested-With": "XMLHttpRequest",
 };
+const successCacheHeaders = { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=60" };
+const noStoreHeaders = { "Cache-Control": "no-store" };
+
+async function fetchMapData() {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(sourceUrl, {
+      method: "POST",
+      headers: { ...bmaBrowserHeaders, "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      body: new URLSearchParams({ payload: "TEST_DATA_GOES_HERE" }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (response.status !== 403 || attempt === 1) return response;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  throw new Error("BMA map feed request failed");
+}
 
 interface BmaStation {
   water_id?: number;
@@ -172,7 +189,7 @@ async function fallbackStation(id: number) {
         ...bmaBrowserHeaders,
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      next: { revalidate },
+      cache: "no-store",
       signal: AbortSignal.timeout(12_000),
     });
     if (!response.ok) return null;
@@ -200,19 +217,13 @@ async function fetchStationDetailFallback() {
 export async function GET() {
   let upstreamStatus = "ไม่ทราบสถานะ";
   try {
-    const response = await fetch(sourceUrl, {
-      method: "POST",
-      headers: { ...bmaBrowserHeaders, "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
-      body: new URLSearchParams({ payload: "TEST_DATA_GOES_HERE" }),
-      next: { revalidate },
-      signal: AbortSignal.timeout(15_000),
-    });
+    const response = await fetchMapData();
 
     if (response.ok) {
       const rows = await response.json() as BmaStation[];
       const stations = rows.map(mapStation).filter((station): station is CanalStation => station !== null);
       if (stations.length) {
-        return Response.json({ generatedAt: new Date().toISOString(), source: "bma-map", stations });
+        return Response.json({ generatedAt: new Date().toISOString(), source: "bma-map", stations }, { headers: successCacheHeaders });
       }
       upstreamStatus = "ไม่พบสถานีในข้อมูลแผนที่";
     } else {
@@ -224,8 +235,8 @@ export async function GET() {
 
   const stations = await fetchStationDetailFallback();
   if (stations.length) {
-    return Response.json({ generatedAt: new Date().toISOString(), source: "station-details", stations });
+    return Response.json({ generatedAt: new Date().toISOString(), source: "station-details", stations }, { headers: successCacheHeaders });
   }
 
-  return Response.json({ error: `ข้อมูลสถานีคลอง กทม. ยังใช้งานไม่ได้ (${upstreamStatus}) โปรดลองใหม่` }, { status: 502 });
+  return Response.json({ error: `ข้อมูลสถานีคลอง กทม. ยังใช้งานไม่ได้ (${upstreamStatus}) โปรดลองใหม่` }, { status: 502, headers: noStoreHeaders });
 }
