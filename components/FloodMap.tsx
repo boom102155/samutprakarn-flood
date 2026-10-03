@@ -37,11 +37,9 @@ interface FloodMapProps {
 
 function reportMarker(report: FloodReport) {
   const color = levelColors[report.waterLevel];
-  const ageHours = (Date.now() - Date.parse(report.createdAt)) / 3_600_000;
-  const opacity = ageHours >= 24 ? 0.42 : ageHours >= 12 ? 0.67 : 1;
   return L.divIcon({
     className: "report-dot-shell",
-    html: `<span class="report-dot${report.condition === "receded" ? " is-receded" : ""}" style="--marker-color:${color};--marker-opacity:${opacity}"></span>`,
+    html: `<span class="report-dot${report.condition === "receded" ? " is-receded" : ""}" style="--marker-color:${color}"></span>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
     popupAnchor: [0, -13],

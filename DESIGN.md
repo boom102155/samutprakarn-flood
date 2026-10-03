@@ -218,7 +218,7 @@ Panels use gently rounded corners (13px for common cards and 18px for the openin
 Six ivory report slides sit within an inset navy panel. Each slide exposes its severity hue as a narrow tab and repeats that hue in a thin status track; category text and a right-aligned count remain visible on each row.
 
 ### Flood Map Marker
-The map uses filled circular severity dots with a dark outline, matching the report colors. The selected province remains bright within its red boundary while the surrounding map is dimmed. Older reports fade, and a dashed circle distinguishes a report marked receded.
+The map uses filled circular severity dots with a dark outline, matching the report colors. The selected province remains bright within its red boundary while the surrounding map is dimmed. Reports remain visible at full marker opacity, and a dashed circle distinguishes a report marked receded.
 
 
 ### Report Row
@@ -229,7 +229,7 @@ Map, latest-report, and emergency-contact sections use white sheets with cool di
 
 ### Named Rules
 **The Bulletin Sheet Rule.** Keep the severity summary as tabbed ivory slides with slim status tracks inside its navy operating surface.
-**The Age-and-State Rule.** Preserve the implementation's age fade, dashed receded marker, and 36-hour report window wherever the corresponding map state is presented.
+**The Receded-State Rule.** Preserve the dashed marker and visible state label for a report marked receded.
 
 ## Do's and Don'ts
 

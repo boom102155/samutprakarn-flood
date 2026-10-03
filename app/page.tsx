@@ -54,11 +54,6 @@ const cameras: { id: string; name: string; road: string; district: string; subdi
   { id: "doh-per-3-009-out", name: "ถ.บางนา–บางปะกง กม.6 · มุ่งหน้าบางปะกง", road: "ทางหลวงหมายเลข 3", district: districts[1], subdistrict: "บางแก้ว", coordinates: [13.6614, 100.6617], feedUrl: "https://camerai1.iticfoundation.org/pass/180.180.242.207:1935/Phase3/PER_3_009_OUT.stream/playlist.m3u8", feedType: "hls", sourceUrl: "https://traffic.longdo.com/cameralist?open=DOH-PER-3-009-out", sourceLabel: "Longdo Traffic · กรมทางหลวง" },
 ];
 
-function reportsWithin36Hours(reports: FloodReport[]) {
-  const now = Date.now();
-  return reports.filter((report) => now - Date.parse(report.createdAt) <= 36 * 60 * 60 * 1000);
-}
-
 function markerOpacity(createdAt: string) {
   const hours = (Date.now() - Date.parse(createdAt)) / 3_600_000;
   return hours >= 24 ? 0.42 : hours >= 12 ? 0.67 : 1;
@@ -188,8 +183,8 @@ function HomeView({ reports, onNavigate, onSelectReport, isLive, connected }: { 
         <div className="home-map-panel">
           <div className="section-heading"><div><h2>สถานการณ์บนแผนที่ จังหวัดสมุทรปราการ</h2><p>แตะจุดเพื่อดูรายงานในพื้นที่</p></div><button className="text-link" onClick={() => onNavigate("map")}>เปิดแผนที่ <ArrowRight size={15} /></button></div>
           <WaterLegend compact />
-          <div className="home-map-wrap"><FloodMap reports={reportsWithin36Hours(reports)} onSelect={(report) => onSelectReport(report.id)} className="preview-map" /></div>
-          <div className="map-footnote"><span><i className="status-pulse" />แสดงข้อมูลภายใน 36 ชั่วโมง</span><span>แผนที่ © OpenStreetMap</span></div>
+          <div className="home-map-wrap"><FloodMap reports={reports} onSelect={(report) => onSelectReport(report.id)} className="preview-map" /></div>
+          <div className="map-footnote"><span><i className="status-pulse" />แสดงรายงานทุกจุด</span><span>แผนที่ © OpenStreetMap</span></div>
         </div>
         <div className="home-latest-panel">
           <div className="section-heading"><div><h2>จุดรายงานล่าสุด</h2><p>เรียงตามเวลาที่ได้รับข้อมูล</p></div><button className="round-icon-button" onClick={() => onNavigate("latest")} aria-label="ดูรายงานทั้งหมด"><ArrowRight size={17} /></button></div>
@@ -339,7 +334,7 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
 }
 
 function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onFlag }: { reports: FloodReport[]; selectedId: string | null; onSelect: (report: FloodReport) => void; onStillFlooded: (id: string) => void; onReceded: (id: string) => void; onFlag: (id: string, reason: string) => void }) {
-  const visible = reportsWithin36Hours(reports);
+  const visible = reports;
   const [rainEnabled, setRainEnabled] = useState(false);
   const [rainLoading, setRainLoading] = useState(false);
   const [rainError, setRainError] = useState("");
@@ -400,7 +395,7 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
       <PageHeader title="แผนที่ระดับน้ำ" description="สถานการณ์จากรายงานของคนในพื้นที่สมุทรปราการ" action={<div className="map-total"><span className="status-pulse" />{visible.length} จุดบนแผนที่</div>} />
       <div className="map-legend-block">
         <WaterLegend />
-        <p><Info size={15} />จุดจางลงเมื่อเกิน 12 และ 24 ชม. หายไปเมื่อเกิน 36 ชม. · จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
+        <p><Info size={15} />จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
         <section className={`rain-forecast-control${rainEnabled ? " is-enabled" : ""}`} aria-label="ชั้นพยากรณ์ฝน">
           <div className="rain-forecast-heading">
             <button type="button" className="rain-layer-toggle" aria-pressed={rainEnabled} onClick={() => setRainEnabled((enabled) => !enabled)}>
@@ -431,7 +426,7 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
         </section>
       </div>
       <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} className="full-map" /></div>
-      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานในรัศมี 36 ชั่วโมง</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span></div>
+      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span></div>
     </div>
   );
 }
@@ -442,14 +437,13 @@ function LatestView({ reports, onSelectReport }: { reports: FloodReport[]; onSel
   const areaReports = reports.filter((report) => (district === "ทุกอำเภอ" || report.district === district) && (subdistrict === "ทุกตำบล" || report.subdistrict === subdistrict));
   const counts = levelGroups.map((group) => ({ ...group, count: areaReports.filter((report) => group.test(report.waterLevel)).length }));
   const latest = areaReports[0]?.createdAt;
-  const activeCount = reportsWithin36Hours(areaReports).length;
   const options = district === "ทุกอำเภอ" ? [] : subdistrictsByDistrict[district] ?? [];
   const total = Math.max(1, counts.reduce((sum, item) => sum + item.count, 0));
   return (
     <div className="content-page latest-view">
       <PageHeader title="อัปเดตระดับน้ำล่าสุด" description="รายงานจากพื้นที่ เรียงจากข้อมูลที่ส่งเข้ามาล่าสุด" />
       <section className="latest-toolbar"><div className="filter-intro"><span className="filter-icon"><Search size={17} /></span><div><b>กรองตามพื้นที่</b><small>เลือกอำเภอและตำบลที่ต้องการดู</small></div></div><div className="filter-controls"><label className="select-wrap"><span className="sr-only">เลือกอำเภอ</span><select value={district} onChange={(event) => { setDistrict(event.target.value); setSubdistrict("ทุกตำบล"); }}><option>ทุกอำเภอ</option>{districts.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={16} /></label><label className={`select-wrap${district === "ทุกอำเภอ" ? " disabled" : ""}`}><span className="sr-only">เลือกตำบล</span><select value={subdistrict} onChange={(event) => setSubdistrict(event.target.value)} disabled={district === "ทุกอำเภอ"}><option>ทุกตำบล</option>{options.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={16} /></label></div></section>
-      <section className="latest-summary"><div className="latest-summary-top"><div><span className="summary-live-dot" /><span>จุดที่แสดงบนแผนที่</span></div><span>{latest ? `รายงานล่าสุด ${timeAgo(latest)}` : "ยังไม่มีรายงาน"}</span></div><div className="latest-count"><strong>{activeCount}</strong><span>จุด</span><small>จาก {areaReports.length} รายงานที่ตรงกับตัวกรอง</small></div><div className="count-bar" aria-label="จำนวนจุดตามระดับน้ำ">{counts.map((item) => <span key={item.label} style={{ background: item.color, width: `${item.count / total * 100}%` }} title={`${item.label}: ${item.count} จุด`} />)}</div><div className="count-labels">{counts.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}<b>{item.count}</b></span>)}</div></section>
+       <section className="latest-summary"><div className="latest-summary-top"><div><span className="summary-live-dot" /><span>รายงานตามตัวกรอง</span></div><span>{latest ? `รายงานล่าสุด ${timeAgo(latest)}` : "ยังไม่มีรายงาน"}</span></div><div className="latest-count"><strong>{areaReports.length}</strong><span>จุด</span><small>ตรงกับตัวกรองที่เลือก</small></div><div className="count-bar" aria-label="จำนวนจุดตามระดับน้ำ">{counts.map((item) => <span key={item.label} style={{ background: item.color, width: `${item.count / total * 100}%` }} title={`${item.label}: ${item.count} จุด`} />)}</div><div className="count-labels">{counts.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}<b>{item.count}</b></span>)}</div></section>
       <section className="latest-list-section"><div className="latest-list-heading"><div><h2>รายงานในพื้นที่</h2><p>แตะรายการเพื่อเปิดตำแหน่งบนแผนที่</p></div><span className="result-count">{areaReports.length} รายงาน</span></div><div className="latest-list">{areaReports.length ? areaReports.map((report) => <ReportRow key={report.id} report={report} onClick={() => onSelectReport(report.id)} />) : <div className="empty-state"><MapPin size={24} /><h3>ยังไม่มีรายงานในพื้นที่นี้</h3><p>เลือกอำเภออื่น หรือเป็นคนแรกที่ส่งข้อมูลจากพื้นที่</p></div>}</div></section>
     </div>
   );

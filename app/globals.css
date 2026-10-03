@@ -197,7 +197,7 @@ button:disabled { cursor: wait; opacity: .7; }
 .map-bottom-note a { color: #56718b; }
 .map-empty-message { position: absolute; z-index: 400; top: 50%; left: 50%; display: flex; align-items: center; gap: 8px; padding: 11px 14px; color: #435f78; border: 1px solid #d8e3eb; border-radius: 9px; background: rgba(255,255,255,.96); box-shadow: var(--shadow-soft); font-size: 11px; transform: translate(-50%, -50%); pointer-events: none; }
 .report-dot-shell { border: 0 !important; background: transparent !important; }
-.report-dot { display: block; width: 21px; height: 21px; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--marker-color); box-shadow: 0 1px 3px rgba(18,35,51,.35); opacity: var(--marker-opacity,1); }
+.report-dot { display: block; width: 21px; height: 21px; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--marker-color); box-shadow: 0 1px 3px rgba(18,35,51,.35); }
 .report-dot.is-receded { border-style: dashed; }
 .leaflet-popup-content-wrapper { padding: 0 !important; border: 1px solid #dce5ed; border-radius: 11px !important; box-shadow: 0 10px 30px rgba(17,42,66,.18) !important; }
 .leaflet-popup-content { width: 270px !important; max-width: calc(100vw - 80px); margin: 13px 14px !important; font-family: inherit !important; }
