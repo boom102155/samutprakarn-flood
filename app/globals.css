@@ -244,6 +244,7 @@ button:disabled { cursor: wait; opacity: .7; }
 .route-inputs input:focus-visible { border-color: #77a9e5; outline: 3px solid rgba(40,123,234,.18); }
 .route-inputs input::placeholder { color: #8999a9; }
 .route-location-button { display: inline-flex; height: 44px; align-items: center; justify-content: center; gap: 6px; padding: 0 11px; color: #365a77; border: 1px solid #d5e1ea; border-radius: 7px; background: #f9fbfd; font-size: 12px; cursor: pointer; }
+.route-location-button:disabled { cursor: wait; opacity: .65; }
 .route-submit { min-height: 44px; gap: 7px; padding: 0 13px; font-size: 12px; white-space: nowrap; }
 .route-submit:disabled { cursor: wait; opacity: .7; }
 .route-error { margin: 9px 0 0; color: #a33e39; font-size: 12px; }
@@ -265,6 +266,15 @@ button:disabled { cursor: wait; opacity: .7; }
 .route-footnote { margin-top: 8px; }
 .route-resolved-place { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; color: #4f6d85; font-size: 12px; line-height: 1.45; }
 .route-resolved-place svg { flex: 0 0 auto; margin-top: 2px; color: #1769c8; }
+.route-location-accuracy { display: flex; align-items: flex-start; gap: 7px; margin-top: 9px; padding: 8px 10px; color: #42637e; border-radius: 7px; background: #eff6fc; font-size: 11px; line-height: 1.5; }
+.route-location-accuracy > svg { flex: 0 0 auto; margin-top: 1px; color: #1769c8; }
+.route-location-accuracy b { color: #2d4f6b; font-variant-numeric: tabular-nums; }
+.route-location-accuracy.is-approximate { color: #7b5917; background: #fff8e8; }
+.route-location-accuracy.is-approximate > svg { color: #a8791f; }
+.route-location-popup { display: grid; gap: 3px; min-width: 170px; color: #35536d; font-size: 11px; }
+.route-location-popup strong { color: #174c80; font-size: 12px; }
+.route-location-popup span { font-variant-numeric: tabular-nums; }
+.route-location-popup small { color: #647c91; font-size: 10px; }
 .map-legend-block { display: grid; gap: 12px; margin: -1px 0 13px; }
 .map-data-layer-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
 .map-legend-block .water-legend { gap: 10px 20px; }

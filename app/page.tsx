@@ -456,21 +456,43 @@ interface RoutePlan {
   destination: MapPosition;
 }
 
-function RouteChecker({ reports, onRouteChange, onSelectReport }: { reports: FloodReport[]; onRouteChange: (route: MapPosition[] | undefined) => void; onSelectReport: (id: string) => void }) {
+function RouteChecker({ reports, onRouteChange, onOriginPositionChange, onSelectReport }: { reports: FloodReport[]; onRouteChange: (route: MapPosition[] | undefined) => void; onOriginPositionChange: (position: MapPosition | null, accuracyMeters: number | null, isCurrent: boolean) => void; onSelectReport: (id: string) => void }) {
   const [origin, setOrigin] = useState("");
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
+  const [originFromCurrent, setOriginFromCurrent] = useState(false);
   const [destination, setDestination] = useState("");
   const [resolvedDestination, setResolvedDestination] = useState("");
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
   const matches = route ? reports.map((report) => ({ report, distance: distanceToRouteInMeters([report.latitude, report.longitude], route.coordinates) })).filter(({ distance }) => distance <= 350).sort((first, second) => first.distance - second.distance) : [];
 
   const useCurrentLocation = () => {
-    if (!navigator.geolocation) { setError("อุปกรณ์นี้ระบุตำแหน่งไม่ได้ วางพิกัดต้นทางแทนได้"); return; }
+    if (!navigator.geolocation) { setError("เบราว์เซอร์นี้ระบุตำแหน่งไม่ได้ โปรดวางพิกัดต้นทางแทน"); return; }
+    setError("");
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => { setOrigin(`${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`); setError(""); setRoute(null); onRouteChange(undefined); },
-      () => setError("ระบุตำแหน่งไม่สำเร็จ โปรดอนุญาตตำแหน่งหรือวางพิกัดเอง"),
-      { enableHighAccuracy: true, timeout: 12_000 },
+      ({ coords }) => {
+        const position: MapPosition = [coords.latitude, coords.longitude];
+        setOrigin(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+        setLocationAccuracy(coords.accuracy);
+        setOriginFromCurrent(true);
+        setRoute(null);
+        setLocating(false);
+        onRouteChange(undefined);
+        onOriginPositionChange(position, coords.accuracy, true);
+      },
+      (geolocationError) => {
+        const message = geolocationError.code === geolocationError.PERMISSION_DENIED
+          ? "ยังไม่ได้รับอนุญาตตำแหน่ง เปิดสิทธิ์ Location ให้เบราว์เซอร์แล้วลองใหม่"
+          : geolocationError.code === geolocationError.POSITION_UNAVAILABLE
+            ? "อุปกรณ์ยังระบุตำแหน่งไม่ได้ ลองเปิด GPS หรือออกไปบริเวณที่โล่ง"
+            : "ค้นหาตำแหน่งใช้เวลานานเกินไป ลองเปิด GPS แล้วแตะค้นหาอีกครั้ง";
+        setError(message);
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 },
     );
   };
 
@@ -512,7 +534,18 @@ function RouteChecker({ reports, onRouteChange, onSelectReport }: { reports: Flo
   return (
     <section className="route-checker">
       <div className="route-checker-heading"><span className="route-icon"><Route size={18} /></span><div><h2>เช็กจุดรายงานตามเส้นทาง</h2><p>ใช้พิกัดต้นทางและค้นหาปลายทางด้วยชื่อสถานที่หรือพิกัด</p></div></div>
-      <div className="route-inputs"><label><span>ต้นทาง</span><input value={origin} onChange={(event) => { setOrigin(event.target.value); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="พิกัด เช่น 13.59, 100.60" autoComplete="off" /></label><button type="button" className="route-location-button" onClick={useCurrentLocation} aria-label="ใช้ตำแหน่งปัจจุบันเป็นต้นทาง"><Crosshair size={16} />ตำแหน่งฉัน</button><label><span>ปลายทาง</span><input value={destination} onChange={(event) => { setDestination(event.target.value); setResolvedDestination(""); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="ชื่อสถานที่ หรือพิกัด" autoComplete="off" /></label><button type="button" className="button button-primary route-submit" onClick={() => void checkRoute()} disabled={loadingRoute}><Route size={16} />{loadingRoute ? "กำลังค้นหาเส้นทาง…" : "เช็กเส้นทาง"}</button></div>
+      <div className="route-inputs"><label><span>ต้นทาง</span><input value={origin} onChange={(event) => {
+        const value = event.target.value;
+        const position = parseMapPosition(value);
+        setOrigin(value);
+        setLocationAccuracy(null);
+        setOriginFromCurrent(false);
+        setRoute(null);
+        onRouteChange(undefined);
+        onOriginPositionChange(position, null, false);
+        setError("");
+      }} placeholder="พิกัด เช่น 13.59, 100.60" autoComplete="off" /></label><button type="button" className="route-location-button" onClick={useCurrentLocation} disabled={locating} aria-label="ใช้ตำแหน่งปัจจุบันเป็นต้นทาง"><Crosshair size={16} />{locating ? "กำลังหา…" : "ตำแหน่งฉัน"}</button><label><span>ปลายทาง</span><input value={destination} onChange={(event) => { setDestination(event.target.value); setResolvedDestination(""); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="ชื่อสถานที่ หรือพิกัด" autoComplete="off" /></label><button type="button" className="button button-primary route-submit" onClick={() => void checkRoute()} disabled={loadingRoute || locating}><Route size={16} />{loadingRoute ? "กำลังค้นหาเส้นทาง…" : "เช็กเส้นทาง"}</button></div>
+      {originFromCurrent && locationAccuracy !== null && <div className={`route-location-accuracy${locationAccuracy > 100 ? " is-approximate" : ""}`} role="status"><Crosshair size={15} /><span><b>{parseMapPosition(origin)?.map((part) => part.toFixed(6)).join(", ")}</b> · อุปกรณ์ประเมินคลาดเคลื่อน ±{Math.round(locationAccuracy)} ม.{locationAccuracy > 100 ? " · ความแม่นยำต่ำ ลองเปิด GPS แล้วค้นหาใหม่ในที่โล่ง" : " · วงรอบหมุดแสดงช่วงคลาดเคลื่อน"}</span></div>}
       {resolvedDestination && <p className="route-resolved-place"><MapPin size={14} />ปลายทางที่พบ: {resolvedDestination}</p>}
       {error && <p className="route-error" role="alert">{error}</p>}
       {route && <div className="route-result">
@@ -542,6 +575,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
   const [forecastHours, setForecastHours] = useState(1);
   const [rainRetryToken, setRainRetryToken] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<MapPosition[]>();
+  const [routeStart, setRouteStart] = useState<{ position: MapPosition; accuracyMeters: number | null; isCurrent: boolean } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -620,7 +654,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
   return (
     <div className="content-page map-page">
       <PageHeader title="แผนที่ระดับน้ำ" description="สถานการณ์จากรายงานของคนในพื้นที่สมุทรปราการ" action={<div className="map-total"><span className="status-pulse" />{visible.length} จุดบนแผนที่</div>} />
-      <RouteChecker reports={visible} onRouteChange={setRouteCoordinates} onSelectReport={onSelectReport} />
+      <RouteChecker reports={visible} onRouteChange={setRouteCoordinates} onOriginPositionChange={(position, accuracyMeters, isCurrent) => setRouteStart(position ? { position, accuracyMeters, isCurrent } : null)} onSelectReport={onSelectReport} />
       <div className="map-legend-block">
         <div className="map-data-layer-controls">
         <section className={`water-station-control${stationLayerEnabled ? " is-enabled" : ""}`} aria-label="ชั้นข้อมูลสถานีระดับน้ำ ThaiWater">
@@ -670,7 +704,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
         <WaterLegend />
         <p><Info size={15} />จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
       </div>
-      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} waterStations={stationLayerEnabled ? thaiWaterStations : undefined} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} routeCoordinates={routeCoordinates} showDistrictBoundaries className="full-map" /></div>
+      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} waterStations={stationLayerEnabled ? thaiWaterStations : undefined} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} routeCoordinates={routeCoordinates} routeStartPosition={routeStart?.position} routeStartAccuracyMeters={routeStart?.accuracyMeters} routeStartIsCurrent={routeStart?.isCurrent} showDistrictBoundaries className="full-map" /></div>
       <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span>{stationLayerEnabled && <span><Waves size={15} />{thaiWaterStations.length} สถานี ThaiWater</span>}<span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span><span><a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer">ขอบเขตอำเภอ geoBoundaries · CC BY 3.0 IGO</a></span></div>
     </div>
   );

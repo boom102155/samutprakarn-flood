@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import { CircleMarker, MapContainer, Marker, Pane, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { Circle, CircleMarker, MapContainer, Marker, Pane, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Check, Flag, MapPin, Navigation, Share2, Waves, X } from "lucide-react";
 import { FloodReport, levelColors, reportFlags, severityLabel, WaterLevel } from "@/lib/types";
@@ -47,6 +47,9 @@ interface FloodMapProps {
   onMapPick?: (position: [number, number]) => void;
   rainForecastPoints?: RainMapPoint[];
   routeCoordinates?: MapPosition[];
+  routeStartPosition?: MapPosition | null;
+  routeStartAccuracyMeters?: number | null;
+  routeStartIsCurrent?: boolean;
   showDistrictBoundaries?: boolean;
   className?: string;
 }
@@ -140,11 +143,12 @@ function MapCamera({ selectedId, reports }: { selectedId?: string | null; report
   return null;
 }
 
-function RouteCamera({ coordinates }: { coordinates?: MapPosition[] }) {
+function RouteCamera({ coordinates, startPosition }: { coordinates?: MapPosition[]; startPosition?: MapPosition | null }) {
   const map = useMap();
   useEffect(() => {
     if (coordinates && coordinates.length > 1) map.fitBounds(L.latLngBounds(coordinates), { padding: [32, 32], maxZoom: 14 });
-  }, [coordinates, map]);
+    else if (startPosition) map.flyTo(startPosition, Math.max(map.getZoom(), 15), { duration: 0.6 });
+  }, [coordinates, map, startPosition]);
   return null;
 }
 
@@ -389,9 +393,14 @@ export default function FloodMap(props: FloodMapProps) {
         <ProvinceHighlight />
         {props.routeCoordinates && props.routeCoordinates.length > 1 && <Polyline positions={props.routeCoordinates} pathOptions={{ color: "#1769dc", weight: 5, opacity: 0.82, lineCap: "round", lineJoin: "round" }} />}
         <MapCamera selectedId={props.selectedId} reports={props.reports} />
-        <RouteCamera coordinates={props.routeCoordinates} />
+        <RouteCamera coordinates={props.routeCoordinates} startPosition={props.routeStartPosition} />
         <OpenSelectedReport selectedId={props.selectedId} reports={props.reports} />
         <MapPickHandler enabled={Boolean(props.pickMode)} onPick={props.onMapPick} />
+        {props.routeStartPosition && props.routeStartAccuracyMeters !== null && props.routeStartAccuracyMeters !== undefined && props.routeStartAccuracyMeters > 0 && props.routeStartAccuracyMeters <= 10_000 && <Circle center={props.routeStartPosition} radius={props.routeStartAccuracyMeters} pathOptions={{ color: "#1769dc", weight: 1.5, fillColor: "#287bea", fillOpacity: 0.12, interactive: false }} />}
+        {props.routeStartPosition && <CircleMarker center={props.routeStartPosition} radius={9} pathOptions={{ color: "#ffffff", weight: 3, fillColor: "#145ca8", fillOpacity: 1 }}>
+          <Tooltip direction="top" offset={[0, -9]} permanent>{props.routeStartIsCurrent ? "ตำแหน่งฉัน" : "จุดเริ่มต้น"}</Tooltip>
+          <Popup><div className="route-location-popup"><strong>{props.routeStartIsCurrent ? "ตำแหน่งฉัน" : "จุดเริ่มต้น"}</strong><span>{props.routeStartPosition[0].toFixed(6)}, {props.routeStartPosition[1].toFixed(6)}</span>{props.routeStartIsCurrent && props.routeStartAccuracyMeters !== null && props.routeStartAccuracyMeters !== undefined && <small>อุปกรณ์ประเมินคลาดเคลื่อน ±{Math.round(props.routeStartAccuracyMeters)} ม.</small>}</div></Popup>
+        </CircleMarker>}
         {props.reports.map((report) => (
           <Marker
             key={report.id}
