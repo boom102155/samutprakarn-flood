@@ -354,7 +354,7 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
   );
 }
 
-function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onFlag }: { reports: FloodReport[]; selectedId: string | null; onSelect: (report: FloodReport) => void; onStillFlooded: (id: string) => void; onReceded: (id: string) => void; onFlag: (id: string, reason: string) => void }) {
+function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { reports: FloodReport[]; selectedId: string | null; onStillFlooded: (id: string) => void; onReceded: (id: string) => void; onFlag: (id: string, reason: string) => void }) {
   const visible = reports;
   const [rainEnabled, setRainEnabled] = useState(false);
   const [rainLoading, setRainLoading] = useState(false);
@@ -446,7 +446,7 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
           </>}
         </section>
       </div>
-      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} showDistrictBoundaries className="full-map" /></div>
+      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} showDistrictBoundaries className="full-map" /></div>
       <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span><span><a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer">ขอบเขตอำเภอ geoBoundaries · CC BY 3.0 IGO</a></span></div>
     </div>
   );
@@ -557,7 +557,7 @@ export default function FloodWatchApp() {
       {actionError && <div className="global-connection-alert"><AlertTriangle size={15} />{actionError}<button onClick={() => setActionError("")} aria-label="ปิด"><X size={15} /></button></div>}
       {view === "home" && <HomeView reports={reports} onNavigate={navigate} onSelectReport={chooseReport} isLive={liveMode} connected={connected} />}
       {view === "report" && <ReportView reports={reports} onSubmit={addReport} onNavigate={navigate} />}
-      {view === "map" && <MapView reports={reports} selectedId={selectedId} onSelect={(report) => setSelectedId(report.id)} onStillFlooded={(id) => void runReportAction(() => confirmStillFlooded(id))} onReceded={(id) => void runReportAction(() => confirmReport(id, "receded"))} onFlag={(id, reason) => void runReportAction(() => flagReport(id, reason))} />}
+       {view === "map" && <MapView reports={reports} selectedId={selectedId} onStillFlooded={(id) => void runReportAction(() => confirmStillFlooded(id))} onReceded={(id) => void runReportAction(() => confirmReport(id, "receded"))} onFlag={(id, reason) => void runReportAction(() => flagReport(id, reason))} />}
       {view === "latest" && <LatestView reports={reports} onSelectReport={chooseReport} />}
       {view === "cctv" && <CctvView onNavigate={navigate} />}
       {loading && <div className="loading-ribbon"><span className="spinner" />กำลังโหลดรายงานล่าสุด…</div>}
