@@ -387,9 +387,13 @@ button:disabled { cursor: wait; opacity: .7; }
 .popup-question { margin: 0 0 7px; color: #29445d; font-size: 10px; font-weight: 750; }
 .popup-actions { display: flex; gap: 7px; }
 .popup-action { display: inline-flex; min-height: 31px; align-items: center; justify-content: center; gap: 5px; flex: 1; padding: 4px; color: #42617e; border: 1px solid #d7e2ed; border-radius: 6px; background: #fff; font-size: 9px; font-weight: 650; cursor: pointer; }
-.popup-action.primary { color: #fff; border-color: #236fc9; background: #2474d5; }
 .popup-action:hover { background: #eef5fc; }
-.popup-action.primary:hover { background: #165fb7; }
+.popup-action.still-flooded { color: #b33a36; border-color: #dfaaa7; background: #fff; }
+.popup-action.still-flooded > svg { color: #d94d48; }
+.popup-action.still-flooded:hover { border-color: #d77f7a; background: #fff8f7; }
+.popup-action.receded { color: #24784f; border-color: #8ac5a5; background: #fff; }
+.popup-action.receded > svg { color: #15946a; }
+.popup-action.receded:hover { border-color: #5ca981; background: #f4fbf7; }
 .flag-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 0; color: #7a6570; border: 0; background: transparent; font-size: 10px; cursor: pointer; }
 .flag-toggle:hover { color: #b54543; text-decoration: underline; text-underline-offset: 3px; }
 .popup-flag-list { display: grid; gap: 5px; }

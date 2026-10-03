@@ -131,15 +131,16 @@ function ProvinceHighlight() {
 function MapCamera({ selectedId, reports }: { selectedId?: string | null; reports: FloodReport[] }) {
   const map = useMap();
   const hasFitProvince = useRef(false);
+  const selected = reports.find((report) => report.id === selectedId);
+  const selectedLatitude = selected?.latitude ?? null;
+  const selectedLongitude = selected?.longitude ?? null;
   useEffect(() => {
     if (!hasFitProvince.current) {
       hasFitProvince.current = true;
       map.fitBounds(provinceBounds, { padding: [24, 24], maxZoom: 12, animate: false });
     }
-    if (!selectedId) return;
-    const selected = reports.find((report) => report.id === selectedId);
-    if (selected) map.flyTo([selected.latitude, selected.longitude], Math.max(map.getZoom(), 14), { duration: 0.7 });
-  }, [map, reports, selectedId]);
+    if (selectedLatitude !== null && selectedLongitude !== null) map.flyTo([selectedLatitude, selectedLongitude], Math.max(map.getZoom(), 14), { duration: 0.7 });
+  }, [map, selectedId, selectedLatitude, selectedLongitude]);
   return null;
 }
 
@@ -154,15 +155,17 @@ function RouteCamera({ coordinates, startPosition }: { coordinates?: MapPosition
 
 function OpenSelectedReport({ selectedId, reports }: { selectedId?: string | null; reports: FloodReport[] }) {
   const map = useMap();
+  const selected = reports.find((report) => report.id === selectedId);
+  const selectedLatitude = selected?.latitude ?? null;
+  const selectedLongitude = selected?.longitude ?? null;
   useEffect(() => {
-    const selected = reports.find((report) => report.id === selectedId);
-    if (!selected) return;
+    if (selectedLatitude === null || selectedLongitude === null) return;
     map.eachLayer((layer) => {
       if (!(layer instanceof L.Marker) || !layer.getPopup()) return;
       const iconClass = layer.options.icon?.options.className ?? "";
-      if (iconClass.includes("report-dot-shell") && layer.getLatLng().equals([selected.latitude, selected.longitude])) layer.openPopup();
+      if (iconClass.includes("report-dot-shell") && layer.getLatLng().equals([selectedLatitude, selectedLongitude])) layer.openPopup();
     });
-  }, [map, reports, selectedId]);
+  }, [map, selectedId, selectedLatitude, selectedLongitude]);
   return null;
 }
 
@@ -301,8 +304,8 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
       <div className="popup-divider" />
       <p className="popup-question">ตอนนี้จุดนี้เป็นอย่างไร</p>
       <div className="popup-actions">
-        <button type="button" className="popup-action primary" onClick={() => props.onStillFlooded?.(report.id)}><Check size={14} /> ยังท่วมอยู่</button>
-        <button type="button" className="popup-action" onClick={() => props.onReceded?.(report.id)}><Check size={14} /> น้ำลดแล้ว</button>
+        <button type="button" className="popup-action still-flooded" onClick={() => props.onStillFlooded?.(report.id)}><Waves size={15} /> ยังท่วมอยู่</button>
+        <button type="button" className="popup-action receded" onClick={() => props.onReceded?.(report.id)}><Check size={14} /> น้ำลดแล้ว</button>
       </div>
       <div className="popup-divider" />
       {!showFlags ? (
