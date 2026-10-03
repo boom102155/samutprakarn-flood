@@ -873,7 +873,6 @@ body { font-size: var(--type-body); }
 .rain-forecast-scale strong { color: #294965; font-weight: 750; }
 .rain-forecast-scale span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .rain-forecast-scale i { width: 10px; height: 10px; border-radius: 50%; }
-.rain-scale-dry { border: 1px solid #b9d5e2; background: #e2f2fa; }
 .rain-scale-light { background: #7dd3fc; }
 .rain-scale-medium { background: #38bdf8; }
 .rain-scale-heavy { background: #2563eb; }

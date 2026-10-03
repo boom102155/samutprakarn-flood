@@ -482,7 +482,6 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { r
             {rainForecast && <>
               <div className="rain-forecast-scale" aria-label="ปริมาณฝนคาดการณ์ หน่วยมิลลิเมตรในหนึ่งชั่วโมง">
                 <strong>ฝน (มม./ชม.)</strong>
-                <span><i className="rain-scale-dry" />0–0.2</span>
                 <span><i className="rain-scale-light" />0.2–1</span>
                 <span><i className="rain-scale-medium" />1–2.5</span>
                 <span><i className="rain-scale-heavy" />2.5–7.5</span>
