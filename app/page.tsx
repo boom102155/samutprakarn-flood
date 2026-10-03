@@ -13,11 +13,10 @@ import {
   districts, FloodReport, levelColors, NewFloodReport, severityLabel,
   subdistrictsByDistrict, VehicleType, waterLevels, WaterTrend,
 } from "@/lib/types";
-import { formatThaiDate, timeAgo, useFloodReports } from "@/lib/useFloodReports";
+import { timeAgo, useFloodReports } from "@/lib/useFloodReports";
 import { distanceToRouteInMeters, MapPosition, parseMapPosition, reportFreshness, reportsNearPosition } from "@/lib/floodInsights";
 import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
 import { ThaiWaterStation, ThaiWaterStationCondition, thaiWaterSourceUrl, thaiWaterStationColors, thaiWaterStationLabels } from "@/lib/thaiwaterStations";
-import { CanalHistory, CanalStation, canalSourceUrl } from "@/lib/canalLevels";
 import CameraHlsFeed, { CameraFeedStatus } from "@/components/CameraHlsFeed";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), {
@@ -449,99 +448,6 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
   );
 }
 
-function CanalHistoryPanel() {
-  const [open, setOpen] = useState(false);
-  const [stations, setStations] = useState<CanalStation[]>([]);
-  const [stationId, setStationId] = useState("");
-  const [history, setHistory] = useState<CanalHistory | null>(null);
-  const [stationsLoading, setStationsLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [stationsError, setStationsError] = useState("");
-  const [historyError, setHistoryError] = useState("");
-  const [historyRetryToken, setHistoryRetryToken] = useState(0);
-  const stationsLoaded = useRef(false);
-  const stationsRequestStarted = useRef(false);
-  const [stationsRetryToken, setStationsRetryToken] = useState(0);
-
-  useEffect(() => {
-    if (!open || stationsLoaded.current || stationsRequestStarted.current) return;
-    stationsRequestStarted.current = true;
-    const controller = new AbortController();
-    setStationsLoading(true);
-    setStationsError("");
-    void fetch("/api/canal-levels", { signal: controller.signal })
-      .then(async (response) => {
-        const result = await response.json() as { stations?: CanalStation[]; error?: string };
-        if (!response.ok) throw new Error(result.error || "โหลดรายชื่อสถานีไม่สำเร็จ");
-        const available = (result.stations ?? []).filter((station) => station.waterLevel !== null).sort((first, second) => first.stationName.localeCompare(second.stationName, "th"));
-        setStations(available);
-        setStationId((current) => current || available[0]?.id || "");
-        stationsLoaded.current = true;
-      })
-      .catch((error: unknown) => {
-        stationsRequestStarted.current = false;
-        if (!controller.signal.aborted) setStationsError(error instanceof Error ? error.message : "โหลดรายชื่อสถานีไม่สำเร็จ");
-      })
-      .finally(() => { if (!controller.signal.aborted) setStationsLoading(false); });
-    return () => {
-      controller.abort();
-      if (!stationsLoaded.current) stationsRequestStarted.current = false;
-    };
-  }, [open, stationsRetryToken]);
-
-  useEffect(() => {
-    if (!open || !stationId) return;
-    const controller = new AbortController();
-    setHistory(null);
-    setHistoryError("");
-    setHistoryLoading(true);
-    void fetch(`/api/canal-levels/history?stationId=${encodeURIComponent(stationId)}`, { signal: controller.signal })
-      .then(async (response) => {
-        const result = await response.json() as CanalHistory & { error?: string };
-        if (!response.ok) throw new Error(result.error || "โหลดประวัติระดับน้ำไม่สำเร็จ");
-        setHistory(result);
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) setHistoryError(error instanceof Error ? error.message : "โหลดประวัติระดับน้ำไม่สำเร็จ");
-      })
-      .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
-    return () => controller.abort();
-  }, [open, stationId, historyRetryToken]);
-
-  const selectedStation = stations.find((station) => station.id === stationId);
-  const readings = history?.readings.slice(-36) ?? [];
-  const levels = readings.map((reading) => reading.waterLevel);
-  const minimum = levels.length ? Math.min(...levels) : 0;
-  const maximum = levels.length ? Math.max(...levels) : 0;
-  const range = maximum - minimum || 0.01;
-  const points = readings.map((reading, index) => `${20 + index / Math.max(1, readings.length - 1) * 360},${112 - (reading.waterLevel - minimum) / range * 82}`).join(" ");
-  const firstReading = readings[0];
-  const latestReading = readings.at(-1);
-  const change = firstReading && latestReading ? latestReading.waterLevel - firstReading.waterLevel : 0;
-
-  return (
-    <section className={`canal-history-panel${open ? " is-open" : ""}`}>
-      <button type="button" className="canal-history-toggle" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span className="history-toggle-icon"><Activity size={17} /></span><span><b>ประวัติระดับน้ำในคลอง</b><small>ดูข้อมูลย้อนหลังจากสถานีตรวจวัดที่เชื่อมโยงกับสมุทรปราการ</small></span><ChevronDown size={17} /></button>
-      {open && <div className="canal-history-content">
-        {stationsLoading && <p className="history-loading"><span className="spinner" />กำลังโหลดรายชื่อสถานี…</p>}
-        {stationsError && <p className="history-error" role="alert">{stationsError}<button type="button" onClick={() => { setStationsError(""); setStationsRetryToken((token) => token + 1); }}>ลองใหม่</button></p>}
-        {!stationsLoading && !stationsError && stations.length > 0 && <label className="history-station-select"><span>เลือกสถานี</span><select value={stationId} onChange={(event) => setStationId(event.target.value)}>{stations.map((station) => <option key={station.id} value={station.id}>{station.stationName} · {station.canalName}</option>)}</select></label>}
-        {stations.length === 0 && !stationsLoading && !stationsError && <p className="history-empty">ยังไม่มีสถานีที่ส่งข้อมูลย้อนหลังได้ในขณะนี้</p>}
-        {historyLoading && <p className="history-loading"><span className="spinner" />กำลังโหลดประวัติระดับน้ำ…</p>}
-        {historyError && <p className="history-error" role="alert">{historyError}<button type="button" onClick={() => { setHistoryError(""); setHistoryRetryToken((token) => token + 1); }}>ลองใหม่</button></p>}
-        {history && !historyLoading && <>
-          {readings.length > 1 ? <>
-            <div className="history-chart-summary"><span>{selectedStation?.canalName} · {readings.length} ช่วงข้อมูล</span><strong className={change > 0.005 ? "rising" : change < -0.005 ? "falling" : "stable"}>{change > 0.005 ? "เพิ่ม" : change < -0.005 ? "ลด" : "ใกล้เคียงเดิม"} {change === 0 ? "" : `${Math.abs(change).toFixed(2)} ม.`}</strong></div>
-            <div className="history-chart-wrap"><div className="history-chart-values"><span>{maximum.toFixed(2)} ม.</span><span>{minimum.toFixed(2)} ม.</span></div><svg viewBox="0 0 400 130" preserveAspectRatio="none" role="img" aria-label={`ประวัติระดับน้ำ${selectedStation?.stationName ?? ""} จาก ${minimum.toFixed(2)} ถึง ${maximum.toFixed(2)} เมตร`}><path d="M20 112 H380 M20 30 H380 M20 71 H380" className="history-chart-grid" /><polyline points={points} className="history-chart-line" /></svg></div>
-            <div className="history-chart-times"><span>{formatThaiDate(firstReading.observedAt)}</span><span>{formatThaiDate(latestReading?.observedAt ?? "")}</span></div>
-          </> : <p className="history-empty">สถานีนี้มีข้อมูลย้อนหลังไม่พอสำหรับแสดงแนวโน้ม</p>}
-        </>}
-        <p className="canal-history-note">หน่วยเป็นเมตรระดับน้ำทะเลปานกลางจาก <a href={canalSourceUrl} target="_blank" rel="noreferrer">สถานีตรวจวัด กทม.</a> ไม่ใช่ความลึกน้ำบนถนน · ข้อมูลอาจขาดช่วง</p>
-      </div>}
-    </section>
-  );
-}
-
 interface RoutePlan {
   coordinates: MapPosition[];
   distanceKm: number;
@@ -553,6 +459,7 @@ interface RoutePlan {
 function RouteChecker({ reports, onRouteChange, onSelectReport }: { reports: FloodReport[]; onRouteChange: (route: MapPosition[] | undefined) => void; onSelectReport: (id: string) => void }) {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
+  const [resolvedDestination, setResolvedDestination] = useState("");
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [error, setError] = useState("");
@@ -569,13 +476,22 @@ function RouteChecker({ reports, onRouteChange, onSelectReport }: { reports: Flo
 
   const checkRoute = async () => {
     const start = parseMapPosition(origin);
-    const end = parseMapPosition(destination);
-    if (!start || !end) { setError("ใส่พิกัดให้ครบ เช่น 13.59, 100.60 หรือวางลิงก์ Google Maps"); return; }
+    if (!start) { setError("ต้นทางต้องเป็นพิกัด เช่น 13.59, 100.60 หรือใช้ปุ่มตำแหน่งฉัน"); return; }
+    if (!destination.trim()) { setError("ใส่ชื่อสถานที่หรือพิกัดปลายทางก่อน"); return; }
     setLoadingRoute(true);
     setError("");
     setRoute(null);
+    setResolvedDestination("");
     onRouteChange(undefined);
     try {
+      let end = parseMapPosition(destination);
+      if (!end) {
+        const geocodeResponse = await fetch(`/api/geocode?q=${encodeURIComponent(destination.trim())}`);
+        const geocode = await geocodeResponse.json() as { latitude?: number; longitude?: number; displayName?: string; error?: string };
+        if (!geocodeResponse.ok || typeof geocode.latitude !== "number" || typeof geocode.longitude !== "number") throw new Error(geocode.error || "ไม่พบสถานที่นี้ ลองเพิ่มชื่ออำเภอหรือใส่พิกัดแทน");
+        end = [geocode.latitude, geocode.longitude];
+        setResolvedDestination(geocode.displayName ?? destination.trim());
+      }
       const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
       const response = await fetch(url);
       if (!response.ok) throw new Error("เชื่อมต่อข้อมูลเส้นทางไม่ได้ ลองอีกครั้งหรือเปิดแผนที่นำทางโดยตรง");
@@ -595,8 +511,9 @@ function RouteChecker({ reports, onRouteChange, onSelectReport }: { reports: Flo
 
   return (
     <section className="route-checker">
-      <div className="route-checker-heading"><span className="route-icon"><Route size={18} /></span><div><h2>เช็กจุดรายงานตามเส้นทาง</h2><p>ใส่ต้นทางและปลายทาง เพื่อดูรายงานที่อยู่ใกล้แนวเส้นทาง</p></div></div>
-      <div className="route-inputs"><label><span>ต้นทาง</span><input value={origin} onChange={(event) => { setOrigin(event.target.value); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="13.59, 100.60 หรือ URL ที่มีพิกัด" autoComplete="off" /></label><button type="button" className="route-location-button" onClick={useCurrentLocation} aria-label="ใช้ตำแหน่งปัจจุบันเป็นต้นทาง"><Crosshair size={16} />ตำแหน่งฉัน</button><label><span>ปลายทาง</span><input value={destination} onChange={(event) => { setDestination(event.target.value); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="13.59, 100.60 หรือ URL ที่มีพิกัด" autoComplete="off" /></label><button type="button" className="button button-primary route-submit" onClick={() => void checkRoute()} disabled={loadingRoute}><Route size={15} />{loadingRoute ? "กำลังหาเส้นทาง…" : "เช็กเส้นทาง"}</button></div>
+      <div className="route-checker-heading"><span className="route-icon"><Route size={18} /></span><div><h2>เช็กจุดรายงานตามเส้นทาง</h2><p>ใช้พิกัดต้นทางและค้นหาปลายทางด้วยชื่อสถานที่หรือพิกัด</p></div></div>
+      <div className="route-inputs"><label><span>ต้นทาง</span><input value={origin} onChange={(event) => { setOrigin(event.target.value); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="พิกัด เช่น 13.59, 100.60" autoComplete="off" /></label><button type="button" className="route-location-button" onClick={useCurrentLocation} aria-label="ใช้ตำแหน่งปัจจุบันเป็นต้นทาง"><Crosshair size={16} />ตำแหน่งฉัน</button><label><span>ปลายทาง</span><input value={destination} onChange={(event) => { setDestination(event.target.value); setResolvedDestination(""); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="ชื่อสถานที่ หรือพิกัด" autoComplete="off" /></label><button type="button" className="button button-primary route-submit" onClick={() => void checkRoute()} disabled={loadingRoute}><Route size={16} />{loadingRoute ? "กำลังค้นหาเส้นทาง…" : "เช็กเส้นทาง"}</button></div>
+      {resolvedDestination && <p className="route-resolved-place"><MapPin size={14} />ปลายทางที่พบ: {resolvedDestination}</p>}
       {error && <p className="route-error" role="alert">{error}</p>}
       {route && <div className="route-result">
         <div className="route-result-summary"><span><b>{route.distanceKm.toFixed(1)} กม.</b> · เวลาเดินทางประมาณ {Math.max(1, Math.round(route.durationMinutes))} นาที</span>{directionsUrl && <a href={directionsUrl} target="_blank" rel="noreferrer">เปิดนำทาง <ExternalLink size={13} /></a>}</div>
@@ -606,7 +523,7 @@ function RouteChecker({ reports, onRouteChange, onSelectReport }: { reports: Flo
           return <button type="button" className="route-report" key={report.id} onClick={() => onSelectReport(report.id)}><i style={{ backgroundColor: levelColors[report.waterLevel] }} /><span><b>{report.locationName}</b><small>{report.condition === "receded" ? "มีผู้แจ้งว่าน้ำลด" : severityLabel(report.waterLevel)} · {freshness.label} · ยืนยัน {report.confirmations} ครั้ง (ไม่ใช่จำนวนผู้ใช้)</small></span><strong>{Math.round(distance)} ม.</strong><ChevronRight size={14} /></button>;
         })}</div> : <div className="route-no-reports"><Info size={15} /><span>ยังไม่มีรายงานใกล้แนวเส้นทางนี้ ซึ่งไม่ได้ยืนยันว่าถนนแห้ง โปรดตรวจสอบสภาพจริงก่อนเดินทาง</span></div>}
       </div>}
-      <p className="route-footnote">พิกัดถูกส่งให้บริการ OSRM เพื่อคำนวณเส้นทาง · รายงานอาจไม่ครอบคลุมพื้นที่ · ไม่ใช่คำรับรองว่าเส้นทางปลอดภัย</p>
+      <p className="route-footnote">ชื่อปลายทางค้นหาผ่าน <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> และส่งพิกัดให้ OSRM คำนวณเส้นทาง · ไม่ใช่คำรับรองว่าเส้นทางปลอดภัย</p>
     </section>
   );
 }
@@ -618,7 +535,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
   const [stationLoading, setStationLoading] = useState(true);
   const [stationError, setStationError] = useState("");
   const [stationRetryToken, setStationRetryToken] = useState(0);
-  const [rainEnabled, setRainEnabled] = useState(false);
+  const [rainEnabled, setRainEnabled] = useState(true);
   const [rainLoading, setRainLoading] = useState(false);
   const [rainError, setRainError] = useState("");
   const [rainForecast, setRainForecast] = useState<RainForecastData | null>(null);
@@ -704,10 +621,8 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
     <div className="content-page map-page">
       <PageHeader title="แผนที่ระดับน้ำ" description="สถานการณ์จากรายงานของคนในพื้นที่สมุทรปราการ" action={<div className="map-total"><span className="status-pulse" />{visible.length} จุดบนแผนที่</div>} />
       <RouteChecker reports={visible} onRouteChange={setRouteCoordinates} onSelectReport={onSelectReport} />
-      <CanalHistoryPanel />
       <div className="map-legend-block">
-        <WaterLegend />
-        <p><Info size={15} />จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
+        <div className="map-data-layer-controls">
         <section className={`water-station-control${stationLayerEnabled ? " is-enabled" : ""}`} aria-label="ชั้นข้อมูลสถานีระดับน้ำ ThaiWater">
           <div className="water-station-heading">
             <button type="button" className="water-station-toggle" aria-pressed={stationLayerEnabled} onClick={() => setStationLayerEnabled((enabled) => !enabled)}>
@@ -721,7 +636,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
             <div className="water-station-legend" aria-label="สถานะสถานี ThaiWater">
               {stationConditionCounts.filter(({ count }) => count > 0).map(({ condition, count }) => <span key={condition}><i style={{ backgroundColor: thaiWaterStationColors[condition] }} />{thaiWaterStationLabels[condition]}<b>{count}</b></span>)}
             </div>
-            <p className="water-station-attribution">ระดับน้ำเป็น ม.รทก. · สถานะข้อมูลเก่าหมายถึงอัปเดตเกิน 24 ชม. · <a href={thaiWaterSourceUrl} target="_blank" rel="noreferrer">คลังข้อมูลน้ำแห่งชาติ (ThaiWater)</a></p>
+            <p className="water-station-attribution">ระดับน้ำเป็น ม.รทก. · ข้อมูลเก่าคืออัปเดตเกิน 24 ชม. · <a href={thaiWaterSourceUrl} target="_blank" rel="noreferrer">ThaiWater</a></p>
           </>}
         </section>
         <section className={`rain-forecast-control${rainEnabled ? " is-enabled" : ""}`} aria-label="ชั้นพยากรณ์ฝน">
@@ -747,10 +662,13 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
                 <span><i className="rain-scale-intense" />7.5–15</span>
                 <span><i className="rain-scale-extreme" />15+</span>
               </div>
-              <p className="rain-forecast-note">ปริมาณฝนพยากรณ์รายชั่วโมง · อัปเดตข้อมูล {forecastUpdatedLabel} น. · <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (CC BY 4.0) · ไม่ใช่ระดับน้ำท่วม</p>
+              <p className="rain-forecast-note">พยากรณ์รายชั่วโมง · อัปเดต {forecastUpdatedLabel} น. · <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a> (CC BY 4.0) · ไม่ใช่ระดับน้ำท่วม</p>
             </>}
           </>}
         </section>
+        </div>
+        <WaterLegend />
+        <p><Info size={15} />จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
       </div>
       <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} waterStations={stationLayerEnabled ? thaiWaterStations : undefined} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} routeCoordinates={routeCoordinates} showDistrictBoundaries className="full-map" /></div>
       <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span>{stationLayerEnabled && <span><Waves size={15} />{thaiWaterStations.length} สถานี ThaiWater</span>}<span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span><span><a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer">ขอบเขตอำเภอ geoBoundaries · CC BY 3.0 IGO</a></span></div>
