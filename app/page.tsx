@@ -253,11 +253,11 @@ function ReportActivity({ reports }: { reports: FloodReport[] }) {
       const ageHours = (Date.now() - Date.parse(report.createdAt)) / 3_600_000;
       return ageHours >= start && ageHours < end;
     }).length;
-    return { label: `${start}–${end} ชม.`, count };
+    return { label: `${start}–${end}`, count };
   });
   const maximum = Math.max(1, ...periods.map((period) => period.count));
   const total = periods.reduce((sum, period) => sum + period.count, 0);
-  return <section className="report-activity"><div className="report-activity-heading"><div><h2>รายงานใน 24 ชั่วโมง</h2><p>จำนวนรายงานที่ส่งเข้ามาตามช่วงเวลา ไม่ใช่ระดับน้ำที่วัดได้</p></div><strong>{total} <small>จุด</small></strong></div><div className="activity-bars" aria-label="จำนวนรายงานแยกตามช่วง 4 ชั่วโมง">{periods.map((period) => <div className="activity-bar-column" key={period.label}><span>{period.count}</span><i><b style={{ height: `${Math.max(period.count ? 8 : 0, period.count / maximum * 100)}%` }} /></i><small>{period.label}</small></div>)}</div></section>;
+  return <section className="report-activity"><div className="report-activity-heading"><div><h2>รายงานใน 24 ชั่วโมง</h2><p>แบ่งช่วงละ 4 ชั่วโมง · ตัวเลขใต้กราฟคือชั่วโมงที่แล้ว · ไม่ใช่ค่าระดับน้ำ</p></div><strong>{total} <small>จุด</small></strong></div><div className="activity-bars" aria-label="จำนวนรายงานแยกตามช่วง 4 ชั่วโมง">{periods.map((period) => <div className="activity-bar-column" key={period.label}><span>{period.count}</span><i><b style={{ height: `${Math.max(period.count ? 8 : 0, period.count / maximum * 100)}%` }} /></i><small>{period.label}</small></div>)}</div></section>;
 }
 
 function levelMeasurement(level: (typeof waterLevels)[number]) {
