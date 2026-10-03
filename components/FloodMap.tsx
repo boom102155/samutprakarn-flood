@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 import { CircleMarker, MapContainer, Marker, Pane, Polygon, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Check, Flag, MapPin, Navigation, Waves, X } from "lucide-react";
@@ -214,6 +215,22 @@ function MapPickHandler({ enabled, onPick }: { enabled: boolean; onPick?: (posit
 function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapProps }) {
   const [showFlags, setShowFlags] = useState(false);
   const [sentFlag, setSentFlag] = useState("");
+  const [showFullPhoto, setShowFullPhoto] = useState(false);
+
+  useEffect(() => {
+    if (!showFullPhoto) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowFullPhoto(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showFullPhoto]);
+
   return (
     <div className="map-popup" onClick={(event) => event.stopPropagation()}>
       <div className="popup-heading-row">
@@ -224,7 +241,12 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
       <p className="popup-location">{report.locationName}</p>
       <p className="popup-meta">{report.trend} · {report.passable.length ? report.passable.join(", ") : "ยังไม่ระบุรถที่ผ่านได้"}</p>
       {report.note && <p className="popup-note">{report.note}</p>}
-      {report.photoUrl && <Image className="popup-photo" src={report.photoUrl} alt={`ภาพรายงานจาก ${report.locationName}`} width={260} height={145} unoptimized />}
+      {report.photoUrl && <>
+        <button type="button" className="popup-photo-button" onClick={() => setShowFullPhoto(true)} aria-label="ดูภาพรายงานขนาดเต็ม">
+          <Image className="popup-photo" src={report.photoUrl} alt={`ภาพรายงานจาก ${report.locationName}`} width={260} height={145} unoptimized />
+        </button>
+        <span className="popup-photo-hint">แตะรูปเพื่อดูขนาดเต็ม</span>
+      </>}
       <p className="popup-timestamp" title={formatThaiDate(report.createdAt)}>{timeAgo(report.createdAt)} · {formatThaiDate(report.createdAt)}</p>
       {report.condition === "receded" && <p className="receded-callout"><Check size={14} /> มีผู้แจ้งว่าน้ำลดแล้ว</p>}
       <div className="popup-divider" />
@@ -246,6 +268,26 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
           ))}
           {sentFlag && <span className="flag-success">รับแจ้งแล้ว ขอบคุณที่ช่วยตรวจสอบ</span>}
         </div>
+      )}
+      {showFullPhoto && report.photoUrl && createPortal(
+        <div className="photo-lightbox" onClick={() => setShowFullPhoto(false)}>
+          <div className="photo-lightbox-dialog" role="dialog" aria-modal="true" aria-label={`ภาพรายงานจาก ${report.locationName}`} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => {
+            if (event.key === "Tab") {
+              event.preventDefault();
+              event.currentTarget.querySelector<HTMLButtonElement>(".photo-lightbox-close")?.focus();
+            }
+          }}>
+            <div className="photo-lightbox-heading">
+              <span>{report.locationName}</span>
+              <button type="button" className="photo-lightbox-close" onClick={() => setShowFullPhoto(false)} aria-label="ปิดภาพขนาดเต็ม" autoFocus><X size={20} /></button>
+            </div>
+            <div className="photo-lightbox-image">
+              <Image src={report.photoUrl} alt={`ภาพรายงานจาก ${report.locationName} ขนาดเต็ม`} fill sizes="94vw" unoptimized />
+            </div>
+            <p>แตะบริเวณรอบภาพหรือกด Esc เพื่อปิด</p>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -309,7 +351,7 @@ export default function FloodMap(props: FloodMapProps) {
             icon={reportMarker(report)}
             eventHandlers={{ click: () => props.onSelect?.(report) }}
           >
-            <Popup minWidth={248} maxWidth={300} maxHeight={360} autoPan autoPanPadding={[30, 30]} keepInView closeButton closeOnClick={false}>
+            <Popup minWidth={248} maxWidth={300} autoPan autoPanPadding={[30, 30]} keepInView closeButton closeOnClick={false}>
               <ReportPopup report={report} props={props} />
             </Popup>
           </Marker>
