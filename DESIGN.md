@@ -196,6 +196,11 @@ Panels use gently rounded corners (13px for common cards and 18px for the openin
 - **Style:** Severity choices and vehicle choices use compact white controls with a fine cool border; selected choices receive a pale blue fill and stronger blue border.
 - **State:** Water state is identified by its six-color marker as well as its label; selected form choices add a check mark or stronger type weight.
 
+### Water-Level Selector
+- Each level choice pairs a Thai water-depth label and centimeter range with a human silhouette showing the corresponding waterline.
+- The water fill uses the level's reserved severity color; the dry state shows the figure above a ground line.
+- Keep the illustration legible in the two-column mobile grid and preserve the selected card's blue outline and checkmark.
+
 ### Cards / Containers
 - **Character:** White bulletin sheets are practical reading surfaces, not ornamental cards.
 - **Corner Style:** Common map and latest panels use 13px corners; larger feature panels use 18px.

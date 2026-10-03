@@ -167,6 +167,27 @@ function PageHeader({ title, description, action }: { title: string; description
   return <div className="page-header"><div><h1>{title}</h1><p>{description}</p></div>{action}</div>;
 }
 
+function WaterLevelFigure({ level }: { level: (typeof waterLevels)[number] }) {
+  const levelIndex = waterLevels.indexOf(level);
+  const waterlineY = [116, 110, 95, 76, 58, 39, 12][levelIndex];
+  const color = levelColors[level];
+  const dry = levelIndex === 0;
+  const wave = `M5 ${waterlineY} C13 ${waterlineY - 2} 20 ${waterlineY + 2} 28 ${waterlineY} S44 ${waterlineY - 2} 52 ${waterlineY} S60 ${waterlineY + 2} 63 ${waterlineY}`;
+
+  return (
+    <svg className="level-figure" viewBox="0 0 68 124" role="img" aria-label={`${severityLabel(level)} ${levelMeasurement(level)}`}>
+      {!dry && <path d={`${wave} L63 122 L5 122 Z`} fill={color} fillOpacity=".34" />}
+      <circle cx="34" cy="13" r="6" fill="#24435d" />
+      <path d="M27 21 L23 23 C20 25 19 30 18 34 L15 45 C14 49 20 52 22 47 L26 36 L27 56 L23 88 L21 108 C20 112 26 114 28 110 L34 75 L40 110 C42 114 48 112 47 108 L45 88 L41 56 L42 36 L46 47 C48 52 54 49 53 45 L50 34 C49 30 48 25 45 23 L41 21 C37 24 31 24 27 21Z" fill="#24435d" />
+      {dry ? <path d="M7 116 H61" stroke={color} strokeWidth="2.5" strokeLinecap="round" /> : <path d={wave} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" />}
+    </svg>
+  );
+}
+
+function levelMeasurement(level: (typeof waterLevels)[number]) {
+  return level.replace(severityLabel(level), "").trim() || "0 ซม.";
+}
+
 function HomeView({ reports, onNavigate, onSelectReport, isLive, connected }: { reports: FloodReport[]; onNavigate: (view: View) => void; onSelectReport: (id: string) => void; isLive: boolean; connected: boolean }) {
   const latestReports = reports.slice(0, 4);
   const lastReport = reports[0]?.createdAt;
@@ -308,7 +329,7 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
           <section className="form-section">
             <div className="form-section-heading"><span className="form-step">2</span><div><h2>ระดับน้ำที่พบ</h2><p>เลือกค่าที่ใกล้เคียงกับสถานการณ์จริง</p></div></div>
             <div className="level-choice-grid">
-              {waterLevels.map((level) => <button key={level} type="button" className={`level-choice${waterLevel === level ? " selected" : ""}`} onClick={() => setWaterLevel(level)} aria-pressed={waterLevel === level}><i style={{ background: levelColors[level] }} /><span>{level}</span>{waterLevel === level && <Check size={15} />}</button>)}
+              {waterLevels.map((level) => <button key={level} type="button" className={`level-choice${waterLevel === level ? " selected" : ""}`} onClick={() => setWaterLevel(level)} aria-pressed={waterLevel === level} aria-label={`${severityLabel(level)} ${levelMeasurement(level)}`}><span className="level-choice-figure"><WaterLevelFigure level={level} /></span><span className="level-choice-copy"><strong>{severityLabel(level)}</strong><small>{levelMeasurement(level)}</small></span>{waterLevel === level && <Check size={15} />}</button>)}
             </div>
           </section>
           <section className="form-section">
