@@ -2,20 +2,22 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck,
-  Camera, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, CloudRain,
-  Crosshair, ExternalLink, Home, Info, Map, MapPin, Phone, Plus, Radio, RefreshCw, Search, Send, ShieldAlert, Upload, Waves, X,
+  Bell, Camera, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, CloudRain,
+  Crosshair, ExternalLink, Home, Info, Map, MapPin, Phone, Plus, Radio, RefreshCw, Route, Search, Send, ShieldAlert, Upload, Waves, X,
 } from "lucide-react";
 import {
   districts, FloodReport, levelColors, NewFloodReport, severityLabel,
   subdistrictsByDistrict, VehicleType, waterLevels, WaterTrend,
 } from "@/lib/types";
-import { timeAgo, useFloodReports } from "@/lib/useFloodReports";
+import { formatThaiDate, timeAgo, useFloodReports } from "@/lib/useFloodReports";
+import { distanceToRouteInMeters, MapPosition, parseMapPosition, reportFreshness, reportsNearPosition } from "@/lib/floodInsights";
 import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
 import { ThaiWaterStation, ThaiWaterStationCondition, thaiWaterSourceUrl, thaiWaterStationColors, thaiWaterStationLabels } from "@/lib/thaiwaterStations";
+import { CanalHistory, CanalStation, canalSourceUrl } from "@/lib/canalLevels";
 import CameraHlsFeed, { CameraFeedStatus } from "@/components/CameraHlsFeed";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), {
@@ -58,27 +60,6 @@ const cameras: { id: string; name: string; road: string; district: string; subdi
 function markerOpacity(createdAt: string) {
   const hours = (Date.now() - Date.parse(createdAt)) / 3_600_000;
   return hours >= 24 ? 0.42 : hours >= 12 ? 0.67 : 1;
-}
-
-function parseCoordinates(input: string): Position | null {
-  let normalizedInput = input;
-  try { normalizedInput = decodeURIComponent(input); } catch { /* Keep the user's text when a pasted link has invalid escapes. */ }
-  const patterns = [
-    /geo:\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/i,
-    /@(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/,
-    /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/i,
-    /(?:map_)?(?:lat|latitude)=(-?\d{1,2}\.\d+)[^&]*&(?:map_)?(?:lon|lng|longitude)=(-?\d{1,3}\.\d+)/i,
-    /[?&](?:q|query|ll|center|destination)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/i,
-    /(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/,
-  ];
-  for (const pattern of patterns) {
-    const match = normalizedInput.match(pattern);
-    if (!match) continue;
-    const latitude = Number(match[1]);
-    const longitude = Number(match[2]);
-    if (latitude >= 5 && latitude <= 21 && longitude >= 97 && longitude <= 106) return [latitude, longitude];
-  }
-  return null;
 }
 
 async function compressImage(file: File) {
@@ -154,10 +135,11 @@ function Shell({ view, onNavigate, children, isLive, connected }: { view: View; 
 }
 
 function ReportRow({ report, onClick, compact = false }: { report: FloodReport; onClick: () => void; compact?: boolean }) {
+  const freshness = reportFreshness(report.createdAt);
   return (
     <button className={`report-row${compact ? " compact-row" : ""}${report.condition === "receded" ? " row-receded" : ""}`} onClick={onClick}>
       <span className="row-severity-dot" style={{ background: levelColors[report.waterLevel], opacity: markerOpacity(report.createdAt) }} />
-      <span className="row-main"><span className="row-location">{report.locationName}{report.condition === "receded" && <em className="receded-tag">น้ำลดแล้ว</em>}</span><span className="row-area">{report.subdistrict} · {report.district.replace("อำเภอ", "")}</span>{!compact && <span className="row-detail">{report.trend} · {report.passable.join(", ") || "ไม่ระบุรถที่ผ่านได้"}</span>}</span>
+      <span className="row-main"><span className="row-location">{report.locationName}{report.condition === "receded" && <em className="receded-tag">น้ำลดแล้ว</em>}</span><span className="row-area">{report.subdistrict} · {report.district.replace("อำเภอ", "")}</span>{!compact && <span className="row-detail">{report.trend} · {report.passable.join(", ") || "ไม่ระบุรถที่ผ่านได้"} · กดยืนยัน {report.confirmations} ครั้ง</span>}<span className={`report-freshness ${freshness.tone}`}>{freshness.label}</span></span>
       <span className="row-level"><strong style={{ color: levelColors[report.waterLevel] }}>{severityLabel(report.waterLevel)}</strong><small><Clock3 size={12} />{timeAgo(report.createdAt)}</small></span>
       <ChevronRight size={17} className="row-chevron" />
     </button>
@@ -185,11 +167,115 @@ function WaterLevelFigure({ level }: { level: (typeof waterLevels)[number] }) {
   );
 }
 
+function NearbyReports({ reports, onSelectReport }: { reports: FloodReport[]; onSelectReport: (id: string) => void }) {
+  const [position, setPosition] = useState<MapPosition | null>(null);
+  const [radius, setRadius] = useState(3000);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [error, setError] = useState("");
+  const nearby = position ? reportsNearPosition(reports, position, radius) : [];
+
+  const findNearby = () => {
+    if (!navigator.geolocation) { setError("อุปกรณ์นี้ระบุตำแหน่งไม่ได้ ลองเปิดแผนที่แล้วเลือกพื้นที่เอง"); return; }
+    setError("");
+    setLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => { setPosition([coords.latitude, coords.longitude]); setLoadingLocation(false); },
+      () => { setError("ระบุตำแหน่งไม่สำเร็จ โปรดอนุญาตตำแหน่งหรือดูรายงานตามอำเภอ"); setLoadingLocation(false); },
+      { enableHighAccuracy: true, timeout: 12_000 },
+    );
+  };
+
+  return (
+    <section className="nearby-panel">
+      <div className="nearby-heading"><div><span className="nearby-icon"><Crosshair size={17} /></span><span><h2>รายงานใกล้ฉัน</h2><p>ใช้ตำแหน่งปัจจุบันเพื่อหารายงานใกล้ที่สุด</p></span></div><button type="button" className="button button-secondary nearby-locate" onClick={findNearby} disabled={loadingLocation}><Crosshair size={15} />{loadingLocation ? "กำลังค้นหา…" : position ? "อัปเดตตำแหน่ง" : "ใช้ตำแหน่งฉัน"}</button></div>
+      {position ? <>
+        <div className="nearby-toolbar"><span>พบ {nearby.length} จุดในระยะ</span><label><span className="sr-only">เลือกรัศมีค้นหารายงาน</span><select value={radius} onChange={(event) => setRadius(Number(event.target.value))}><option value={1000}>1 กม.</option><option value={3000}>3 กม.</option><option value={5000}>5 กม.</option></select></label></div>
+        {nearby.length ? <div className="nearby-list">{nearby.slice(0, 3).map(({ report, distance }) => {
+          const freshness = reportFreshness(report.createdAt);
+          return <button type="button" key={report.id} className="nearby-report" onClick={() => onSelectReport(report.id)}>
+            <i style={{ backgroundColor: levelColors[report.waterLevel] }} />
+            <span><b>{report.locationName}</b><small>{report.subdistrict} · {report.condition === "receded" ? "มีผู้แจ้งว่าน้ำลด" : severityLabel(report.waterLevel)} · {freshness.label}</small></span>
+            <strong>{distance < 1000 ? `${Math.round(distance)} ม.` : `${(distance / 1000).toFixed(1)} กม.`}</strong>
+            <ChevronRight size={15} />
+          </button>;
+        })}</div> : <div className="nearby-empty"><MapPin size={16} /><span>ยังไม่มีรายงานในรัศมีนี้ ลองเพิ่มระยะค้นหา หรือดูข้อมูลตามอำเภอ</span></div>}
+        <p className="nearby-disclaimer">ระยะทางเป็นเส้นตรงโดยประมาณ ไม่ใช่ระยะทางตามถนน</p>
+      </> : <div className="nearby-empty"><MapPin size={16} /><span>อนุญาตตำแหน่งเพื่อดูรายงานรอบตัว ระบบใช้ตำแหน่งเพื่อคำนวณบนอุปกรณ์นี้</span></div>}
+      {error && <p className="nearby-error" role="status">{error}</p>}
+    </section>
+  );
+}
+
+interface WatchedArea {
+  district: string;
+  subdistrict: string;
+}
+
+const WATCHED_AREAS_STORAGE_KEY = "samutprakarn-watched-areas-v1";
+const WATCH_NOTIFICATIONS_STORAGE_KEY = "samutprakarn-watch-notifications-v1";
+
+function WatchedAreas({ areas, notificationsEnabled, onChange, onToggleNotifications }: {
+  areas: WatchedArea[];
+  notificationsEnabled: boolean;
+  onChange: (areas: WatchedArea[]) => void;
+  onToggleNotifications: () => Promise<string | null>;
+}) {
+  const [district, setDistrict] = useState(districts[0]);
+  const [subdistrict, setSubdistrict] = useState("ทุกตำบล");
+  const [message, setMessage] = useState("");
+  const options = subdistrictsByDistrict[district] ?? [];
+  const addArea = () => {
+    if (areas.some((area) => area.district === district && area.subdistrict === subdistrict)) { setMessage("ติดตามพื้นที่นี้อยู่แล้ว"); return; }
+    setMessage("");
+    onChange([...areas, { district, subdistrict }]);
+  };
+
+  const toggleNotifications = async () => {
+    setMessage("");
+    const error = await onToggleNotifications();
+    if (error) setMessage(error);
+  };
+
+  return (
+    <section className="watched-area-panel">
+      <div className="watched-heading"><div><span className="watched-icon"><Bell size={17} /></span><span><h2>ติดตามพื้นที่ที่สนใจ</h2><p>บันทึกไว้ในอุปกรณ์นี้ ไม่ต้องสมัครสมาชิก</p></span></div><button type="button" className={`watch-notification-button${notificationsEnabled ? " is-enabled" : ""}`} onClick={() => void toggleNotifications()} disabled={areas.length === 0 && !notificationsEnabled}><Bell size={14} />{notificationsEnabled ? "ปิดแจ้งเตือน" : "เปิดแจ้งเตือน"}</button></div>
+      <div className="watch-add-row"><label><span className="sr-only">เลือกอำเภอที่ต้องการติดตาม</span><select value={district} onChange={(event) => { setDistrict(event.target.value); setSubdistrict("ทุกตำบล"); }}>{districts.map((item) => <option key={item}>{item}</option>)}</select></label><label><span className="sr-only">เลือกตำบลที่ต้องการติดตาม</span><select value={subdistrict} onChange={(event) => setSubdistrict(event.target.value)}><option>ทุกตำบล</option>{options.map((item) => <option key={item}>{item}</option>)}</select></label><button type="button" className="button button-secondary" onClick={addArea}><Plus size={15} />เพิ่มพื้นที่</button></div>
+      {areas.length > 0 ? <div className="watched-area-list">{areas.map((area) => <span className="watched-area-chip" key={`${area.district}|${area.subdistrict}`}>{area.subdistrict === "ทุกตำบล" ? area.district : `${area.subdistrict} · ${area.district.replace("อำเภอ", "")}`}<button type="button" onClick={() => onChange(areas.filter((item) => item !== area))} aria-label={`เลิกติดตาม${area.subdistrict === "ทุกตำบล" ? area.district : area.subdistrict}`}><X size={13} /></button></span>)}</div> : <p className="watched-empty">เลือกอำเภอหรือตำบลเพื่อบันทึกพื้นที่ที่อยากติดตาม</p>}
+      <p className="watched-footnote">การแจ้งเตือนทำงานเมื่อเปิดเว็บไซต์ค้างไว้ และเบราว์เซอร์อนุญาตการแจ้งเตือน{message && <span role="status"> · {message}</span>}</p>
+    </section>
+  );
+}
+
+function ReportActivity({ reports }: { reports: FloodReport[] }) {
+  const periods = Array.from({ length: 6 }, (_, index) => {
+    const start = (5 - index) * 4;
+    const end = start + 4;
+    const count = reports.filter((report) => {
+      const ageHours = (Date.now() - Date.parse(report.createdAt)) / 3_600_000;
+      return ageHours >= start && ageHours < end;
+    }).length;
+    return { label: `${start}–${end} ชม.`, count };
+  });
+  const maximum = Math.max(1, ...periods.map((period) => period.count));
+  const total = periods.reduce((sum, period) => sum + period.count, 0);
+  return <section className="report-activity"><div className="report-activity-heading"><div><h2>รายงานใน 24 ชั่วโมง</h2><p>จำนวนรายงานที่ส่งเข้ามาตามช่วงเวลา ไม่ใช่ระดับน้ำที่วัดได้</p></div><strong>{total} <small>จุด</small></strong></div><div className="activity-bars" aria-label="จำนวนรายงานแยกตามช่วง 4 ชั่วโมง">{periods.map((period) => <div className="activity-bar-column" key={period.label}><span>{period.count}</span><i><b style={{ height: `${Math.max(period.count ? 8 : 0, period.count / maximum * 100)}%` }} /></i><small>{period.label}</small></div>)}</div></section>;
+}
+
 function levelMeasurement(level: (typeof waterLevels)[number]) {
   return level.replace(severityLabel(level), "").trim() || "0 ซม.";
 }
 
-function HomeView({ reports, onNavigate, onSelectReport, isLive, connected }: { reports: FloodReport[]; onNavigate: (view: View) => void; onSelectReport: (id: string) => void; isLive: boolean; connected: boolean }) {
+function HomeView({ reports, onNavigate, onSelectReport, isLive, connected, watchedAreas, notificationsEnabled, onWatchAreasChange, onToggleNotifications }: {
+  reports: FloodReport[];
+  onNavigate: (view: View) => void;
+  onSelectReport: (id: string) => void;
+  isLive: boolean;
+  connected: boolean;
+  watchedAreas: WatchedArea[];
+  notificationsEnabled: boolean;
+  onWatchAreasChange: (areas: WatchedArea[]) => void;
+  onToggleNotifications: () => Promise<string | null>;
+}) {
   const latestReports = reports.slice(0, 4);
   const lastReport = reports[0]?.createdAt;
   const highestGroupCount = Math.max(1, ...levelGroups.map((group) => reports.filter((report) => group.test(report.waterLevel)).length));
@@ -201,6 +287,7 @@ function HomeView({ reports, onNavigate, onSelectReport, isLive, connected }: { 
         <div className="home-intro-copy"><h1>เช็กน้ำสมุทรปราการ<br /><span>ช่วยกันรายงานจากพื้นที่</span></h1><p>ติดตามระดับน้ำสมุทรปราการจากรายงานล่าสุดของคนในพื้นที่ เพื่อวางแผนเส้นทางและช่วยกันดูแลชุมชน</p><div className="intro-actions"><button className="button button-primary button-report-main" onClick={() => onNavigate("report")}><Plus size={20} />รายงานระดับน้ำ</button><button className="button button-quiet" onClick={() => onNavigate("map")}><Map size={17} />ดูแผนที่ <ArrowRight size={15} /></button></div></div>
         <div className="intro-rack" aria-label="จำนวนรายงานแยกตามระดับน้ำ"><div className="rack-heading"><strong>ระดับน้ำตามรายงาน</strong><span>{reports.length} จุด</span></div><div className="rack-slides">{levelGroups.map((group) => { const count = reports.filter((report) => group.test(report.waterLevel)).length; return <div className="rack-slide" key={group.label}><i className="rack-tab" style={{ background: group.color }} /><span className="rack-label">{group.label}</span><span className="rack-track"><i style={{ width: `${Math.max(count ? 5 : 0, count / highestGroupCount * 100)}%`, background: group.color }} /></span><b>{count}</b></div>; })}</div><button className="rack-footer" onClick={() => onNavigate("latest")}><span>ข้อมูลล่าสุด {lastReport ? timeAgo(lastReport) : "—"}</span><span>เปิดรายงานทั้งหมด <ArrowRight size={13} /></span></button></div>
       </section>
+      <NearbyReports reports={reports} onSelectReport={onSelectReport} />
       <section className="home-workspace">
         <div className="home-map-panel">
           <div className="section-heading"><div><h2>สถานการณ์บนแผนที่ จังหวัดสมุทรปราการ</h2><p>แตะจุดเพื่อดูรายงานในพื้นที่</p></div><button className="text-link" onClick={() => onNavigate("map")}>เปิดแผนที่ <ArrowRight size={15} /></button></div>
@@ -215,7 +302,14 @@ function HomeView({ reports, onNavigate, onSelectReport, isLive, connected }: { 
         </div>
       </section>
       <section className="home-bottom-grid">
+        <WatchedAreas areas={watchedAreas} notificationsEnabled={notificationsEnabled} onChange={onWatchAreasChange} onToggleNotifications={onToggleNotifications} />
         <EmergencyContacts />
+        <details className="safety-reading-guide"><summary><Info size={16} />อ่านข้อมูลและใช้แผนที่อย่างไรให้ปลอดภัย</summary><div>
+          <p><b>รายงานใหม่</b> คือข้อมูลที่ส่งมาไม่เกิน 2 ชั่วโมง · <b>เริ่มเก่า</b> คือ 2–6 ชั่วโมง · <b>ข้อมูลเก่า</b> คือเกิน 6 ชั่วโมง ควรตรวจสอบหน้างานก่อนตัดสินใจ</p>
+          <p><b>ไม่มีรายงาน ไม่ได้แปลว่าถนนแห้ง</b> และข้อมูลรถที่ผ่านได้เป็นสิ่งที่ผู้รายงานพบ ณ เวลานั้น ไม่รับรองสภาพถนนปัจจุบัน จำนวนครั้งยืนยันนับการกดบนเว็บไซต์ ไม่ได้ยืนยันว่าเป็นคนละคน</p>
+          <p>ค่าจากสถานี ThaiWater เป็นระดับน้ำเทียบระดับทะเลปานกลาง (ม.รทก.) ไม่ใช่ความลึกน้ำบนถนน ส่วนพยากรณ์ฝนไม่ใช่แผนที่น้ำท่วม</p>
+          <p>หากมีเหตุฉุกเฉิน โทร <a href="tel:1669">1669</a> และหลีกเลี่ยงการขับผ่านน้ำที่มองไม่เห็นพื้นถนน</p>
+        </div></details>
       </section>
     </div>
   );
@@ -243,7 +337,7 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
   const toggleVehicle = (vehicle: VehicleType) => setPassable((current) => current.includes(vehicle) ? current.filter((item) => item !== vehicle) : [...current, vehicle]);
   const applyCoordinates = (value: string) => {
     setCoordinateInput(value);
-    const parsed = parseCoordinates(value);
+    const parsed = parseMapPosition(value);
     if (parsed) {
       setPosition(parsed);
       setPositionError("");
@@ -355,7 +449,169 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
   );
 }
 
-function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { reports: FloodReport[]; selectedId: string | null; onStillFlooded: (id: string) => void; onReceded: (id: string) => void; onFlag: (id: string, reason: string) => void }) {
+function CanalHistoryPanel() {
+  const [open, setOpen] = useState(false);
+  const [stations, setStations] = useState<CanalStation[]>([]);
+  const [stationId, setStationId] = useState("");
+  const [history, setHistory] = useState<CanalHistory | null>(null);
+  const [stationsLoading, setStationsLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [stationsError, setStationsError] = useState("");
+  const [historyError, setHistoryError] = useState("");
+  const [historyRetryToken, setHistoryRetryToken] = useState(0);
+  const stationsLoaded = useRef(false);
+  const stationsRequestStarted = useRef(false);
+  const [stationsRetryToken, setStationsRetryToken] = useState(0);
+
+  useEffect(() => {
+    if (!open || stationsLoaded.current || stationsRequestStarted.current) return;
+    stationsRequestStarted.current = true;
+    const controller = new AbortController();
+    setStationsLoading(true);
+    setStationsError("");
+    void fetch("/api/canal-levels", { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as { stations?: CanalStation[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "โหลดรายชื่อสถานีไม่สำเร็จ");
+        const available = (result.stations ?? []).filter((station) => station.waterLevel !== null).sort((first, second) => first.stationName.localeCompare(second.stationName, "th"));
+        setStations(available);
+        setStationId((current) => current || available[0]?.id || "");
+        stationsLoaded.current = true;
+      })
+      .catch((error: unknown) => {
+        stationsRequestStarted.current = false;
+        if (!controller.signal.aborted) setStationsError(error instanceof Error ? error.message : "โหลดรายชื่อสถานีไม่สำเร็จ");
+      })
+      .finally(() => { if (!controller.signal.aborted) setStationsLoading(false); });
+    return () => {
+      controller.abort();
+      if (!stationsLoaded.current) stationsRequestStarted.current = false;
+    };
+  }, [open, stationsRetryToken]);
+
+  useEffect(() => {
+    if (!open || !stationId) return;
+    const controller = new AbortController();
+    setHistory(null);
+    setHistoryError("");
+    setHistoryLoading(true);
+    void fetch(`/api/canal-levels/history?stationId=${encodeURIComponent(stationId)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as CanalHistory & { error?: string };
+        if (!response.ok) throw new Error(result.error || "โหลดประวัติระดับน้ำไม่สำเร็จ");
+        setHistory(result);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setHistoryError(error instanceof Error ? error.message : "โหลดประวัติระดับน้ำไม่สำเร็จ");
+      })
+      .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
+    return () => controller.abort();
+  }, [open, stationId, historyRetryToken]);
+
+  const selectedStation = stations.find((station) => station.id === stationId);
+  const readings = history?.readings.slice(-36) ?? [];
+  const levels = readings.map((reading) => reading.waterLevel);
+  const minimum = levels.length ? Math.min(...levels) : 0;
+  const maximum = levels.length ? Math.max(...levels) : 0;
+  const range = maximum - minimum || 0.01;
+  const points = readings.map((reading, index) => `${20 + index / Math.max(1, readings.length - 1) * 360},${112 - (reading.waterLevel - minimum) / range * 82}`).join(" ");
+  const firstReading = readings[0];
+  const latestReading = readings.at(-1);
+  const change = firstReading && latestReading ? latestReading.waterLevel - firstReading.waterLevel : 0;
+
+  return (
+    <section className={`canal-history-panel${open ? " is-open" : ""}`}>
+      <button type="button" className="canal-history-toggle" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span className="history-toggle-icon"><Activity size={17} /></span><span><b>ประวัติระดับน้ำในคลอง</b><small>ดูข้อมูลย้อนหลังจากสถานีตรวจวัดที่เชื่อมโยงกับสมุทรปราการ</small></span><ChevronDown size={17} /></button>
+      {open && <div className="canal-history-content">
+        {stationsLoading && <p className="history-loading"><span className="spinner" />กำลังโหลดรายชื่อสถานี…</p>}
+        {stationsError && <p className="history-error" role="alert">{stationsError}<button type="button" onClick={() => { setStationsError(""); setStationsRetryToken((token) => token + 1); }}>ลองใหม่</button></p>}
+        {!stationsLoading && !stationsError && stations.length > 0 && <label className="history-station-select"><span>เลือกสถานี</span><select value={stationId} onChange={(event) => setStationId(event.target.value)}>{stations.map((station) => <option key={station.id} value={station.id}>{station.stationName} · {station.canalName}</option>)}</select></label>}
+        {stations.length === 0 && !stationsLoading && !stationsError && <p className="history-empty">ยังไม่มีสถานีที่ส่งข้อมูลย้อนหลังได้ในขณะนี้</p>}
+        {historyLoading && <p className="history-loading"><span className="spinner" />กำลังโหลดประวัติระดับน้ำ…</p>}
+        {historyError && <p className="history-error" role="alert">{historyError}<button type="button" onClick={() => { setHistoryError(""); setHistoryRetryToken((token) => token + 1); }}>ลองใหม่</button></p>}
+        {history && !historyLoading && <>
+          {readings.length > 1 ? <>
+            <div className="history-chart-summary"><span>{selectedStation?.canalName} · {readings.length} ช่วงข้อมูล</span><strong className={change > 0.005 ? "rising" : change < -0.005 ? "falling" : "stable"}>{change > 0.005 ? "เพิ่ม" : change < -0.005 ? "ลด" : "ใกล้เคียงเดิม"} {change === 0 ? "" : `${Math.abs(change).toFixed(2)} ม.`}</strong></div>
+            <div className="history-chart-wrap"><div className="history-chart-values"><span>{maximum.toFixed(2)} ม.</span><span>{minimum.toFixed(2)} ม.</span></div><svg viewBox="0 0 400 130" preserveAspectRatio="none" role="img" aria-label={`ประวัติระดับน้ำ${selectedStation?.stationName ?? ""} จาก ${minimum.toFixed(2)} ถึง ${maximum.toFixed(2)} เมตร`}><path d="M20 112 H380 M20 30 H380 M20 71 H380" className="history-chart-grid" /><polyline points={points} className="history-chart-line" /></svg></div>
+            <div className="history-chart-times"><span>{formatThaiDate(firstReading.observedAt)}</span><span>{formatThaiDate(latestReading?.observedAt ?? "")}</span></div>
+          </> : <p className="history-empty">สถานีนี้มีข้อมูลย้อนหลังไม่พอสำหรับแสดงแนวโน้ม</p>}
+        </>}
+        <p className="canal-history-note">หน่วยเป็นเมตรระดับน้ำทะเลปานกลางจาก <a href={canalSourceUrl} target="_blank" rel="noreferrer">สถานีตรวจวัด กทม.</a> ไม่ใช่ความลึกน้ำบนถนน · ข้อมูลอาจขาดช่วง</p>
+      </div>}
+    </section>
+  );
+}
+
+interface RoutePlan {
+  coordinates: MapPosition[];
+  distanceKm: number;
+  durationMinutes: number;
+  origin: MapPosition;
+  destination: MapPosition;
+}
+
+function RouteChecker({ reports, onRouteChange, onSelectReport }: { reports: FloodReport[]; onRouteChange: (route: MapPosition[] | undefined) => void; onSelectReport: (id: string) => void }) {
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [route, setRoute] = useState<RoutePlan | null>(null);
+  const [loadingRoute, setLoadingRoute] = useState(false);
+  const [error, setError] = useState("");
+  const matches = route ? reports.map((report) => ({ report, distance: distanceToRouteInMeters([report.latitude, report.longitude], route.coordinates) })).filter(({ distance }) => distance <= 350).sort((first, second) => first.distance - second.distance) : [];
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) { setError("อุปกรณ์นี้ระบุตำแหน่งไม่ได้ วางพิกัดต้นทางแทนได้"); return; }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => { setOrigin(`${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`); setError(""); setRoute(null); onRouteChange(undefined); },
+      () => setError("ระบุตำแหน่งไม่สำเร็จ โปรดอนุญาตตำแหน่งหรือวางพิกัดเอง"),
+      { enableHighAccuracy: true, timeout: 12_000 },
+    );
+  };
+
+  const checkRoute = async () => {
+    const start = parseMapPosition(origin);
+    const end = parseMapPosition(destination);
+    if (!start || !end) { setError("ใส่พิกัดให้ครบ เช่น 13.59, 100.60 หรือวางลิงก์ Google Maps"); return; }
+    setLoadingRoute(true);
+    setError("");
+    setRoute(null);
+    onRouteChange(undefined);
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("เชื่อมต่อข้อมูลเส้นทางไม่ได้ ลองอีกครั้งหรือเปิดแผนที่นำทางโดยตรง");
+      const result = await response.json() as { code?: string; routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] } }[] };
+      const best = result.routes?.[0];
+      if (result.code !== "Ok" || !best?.geometry.coordinates.length) throw new Error("ไม่พบเส้นทางระหว่างพิกัดนี้ ตรวจสอบจุดเริ่มต้นและปลายทางอีกครั้ง");
+      const coordinates = best.geometry.coordinates.map(([longitude, latitude]) => [latitude, longitude] as MapPosition);
+      const nextRoute = { coordinates, distanceKm: best.distance / 1000, durationMinutes: best.duration / 60, origin: start, destination: end };
+      setRoute(nextRoute);
+      onRouteChange(coordinates);
+    } catch (routeError) {
+      setError(routeError instanceof Error ? routeError.message : "ตรวจสอบเส้นทางไม่สำเร็จ โปรดลองอีกครั้ง");
+    } finally { setLoadingRoute(false); }
+  };
+
+  const directionsUrl = route && `https://www.google.com/maps/dir/?api=1&origin=${route.origin.join(",")}&destination=${route.destination.join(",")}&travelmode=driving`;
+
+  return (
+    <section className="route-checker">
+      <div className="route-checker-heading"><span className="route-icon"><Route size={18} /></span><div><h2>เช็กจุดรายงานตามเส้นทาง</h2><p>ใส่ต้นทางและปลายทาง เพื่อดูรายงานที่อยู่ใกล้แนวเส้นทาง</p></div></div>
+      <div className="route-inputs"><label><span>ต้นทาง</span><input value={origin} onChange={(event) => { setOrigin(event.target.value); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="13.59, 100.60 หรือ URL ที่มีพิกัด" autoComplete="off" /></label><button type="button" className="route-location-button" onClick={useCurrentLocation} aria-label="ใช้ตำแหน่งปัจจุบันเป็นต้นทาง"><Crosshair size={16} />ตำแหน่งฉัน</button><label><span>ปลายทาง</span><input value={destination} onChange={(event) => { setDestination(event.target.value); setRoute(null); onRouteChange(undefined); setError(""); }} placeholder="13.59, 100.60 หรือ URL ที่มีพิกัด" autoComplete="off" /></label><button type="button" className="button button-primary route-submit" onClick={() => void checkRoute()} disabled={loadingRoute}><Route size={15} />{loadingRoute ? "กำลังหาเส้นทาง…" : "เช็กเส้นทาง"}</button></div>
+      {error && <p className="route-error" role="alert">{error}</p>}
+      {route && <div className="route-result">
+        <div className="route-result-summary"><span><b>{route.distanceKm.toFixed(1)} กม.</b> · เวลาเดินทางประมาณ {Math.max(1, Math.round(route.durationMinutes))} นาที</span>{directionsUrl && <a href={directionsUrl} target="_blank" rel="noreferrer">เปิดนำทาง <ExternalLink size={13} /></a>}</div>
+        <p className="route-result-caution">เส้นสีน้ำเงินคือแนวทางอ้างอิงจาก OpenStreetMap · พบ {matches.length} รายงานภายใน 350 ม. จากเส้นทาง</p>
+        {matches.length ? <div className="route-report-list">{matches.slice(0, 4).map(({ report, distance }) => {
+          const freshness = reportFreshness(report.createdAt);
+          return <button type="button" className="route-report" key={report.id} onClick={() => onSelectReport(report.id)}><i style={{ backgroundColor: levelColors[report.waterLevel] }} /><span><b>{report.locationName}</b><small>{report.condition === "receded" ? "มีผู้แจ้งว่าน้ำลด" : severityLabel(report.waterLevel)} · {freshness.label} · ยืนยัน {report.confirmations} ครั้ง (ไม่ใช่จำนวนผู้ใช้)</small></span><strong>{Math.round(distance)} ม.</strong><ChevronRight size={14} /></button>;
+        })}</div> : <div className="route-no-reports"><Info size={15} /><span>ยังไม่มีรายงานใกล้แนวเส้นทางนี้ ซึ่งไม่ได้ยืนยันว่าถนนแห้ง โปรดตรวจสอบสภาพจริงก่อนเดินทาง</span></div>}
+      </div>}
+      <p className="route-footnote">พิกัดถูกส่งให้บริการ OSRM เพื่อคำนวณเส้นทาง · รายงานอาจไม่ครอบคลุมพื้นที่ · ไม่ใช่คำรับรองว่าเส้นทางปลอดภัย</p>
+    </section>
+  );
+}
+
+function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSelectReport }: { reports: FloodReport[]; selectedId: string | null; onStillFlooded: (id: string) => void; onReceded: (id: string) => void; onFlag: (id: string, reason: string) => void; onSelectReport: (id: string) => void }) {
   const visible = reports;
   const [stationLayerEnabled, setStationLayerEnabled] = useState(true);
   const [thaiWaterStations, setThaiWaterStations] = useState<ThaiWaterStation[]>([]);
@@ -368,6 +624,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { r
   const [rainForecast, setRainForecast] = useState<RainForecastData | null>(null);
   const [forecastHours, setForecastHours] = useState(1);
   const [rainRetryToken, setRainRetryToken] = useState(0);
+  const [routeCoordinates, setRouteCoordinates] = useState<MapPosition[]>();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -446,6 +703,8 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { r
   return (
     <div className="content-page map-page">
       <PageHeader title="แผนที่ระดับน้ำ" description="สถานการณ์จากรายงานของคนในพื้นที่สมุทรปราการ" action={<div className="map-total"><span className="status-pulse" />{visible.length} จุดบนแผนที่</div>} />
+      <RouteChecker reports={visible} onRouteChange={setRouteCoordinates} onSelectReport={onSelectReport} />
+      <CanalHistoryPanel />
       <div className="map-legend-block">
         <WaterLegend />
         <p><Info size={15} />จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
@@ -493,7 +752,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { r
           </>}
         </section>
       </div>
-      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} waterStations={stationLayerEnabled ? thaiWaterStations : undefined} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} showDistrictBoundaries className="full-map" /></div>
+      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} waterStations={stationLayerEnabled ? thaiWaterStations : undefined} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} routeCoordinates={routeCoordinates} showDistrictBoundaries className="full-map" /></div>
       <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span>{stationLayerEnabled && <span><Waves size={15} />{thaiWaterStations.length} สถานี ThaiWater</span>}<span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span><span><a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer">ขอบเขตอำเภอ geoBoundaries · CC BY 3.0 IGO</a></span></div>
     </div>
   );
@@ -512,7 +771,8 @@ function LatestView({ reports, onSelectReport }: { reports: FloodReport[]; onSel
       <PageHeader title="อัปเดตระดับน้ำล่าสุด" description="รายงานจากพื้นที่ เรียงจากข้อมูลที่ส่งเข้ามาล่าสุด" />
       <section className="latest-toolbar"><div className="filter-intro"><span className="filter-icon"><Search size={17} /></span><div><b>กรองตามพื้นที่</b><small>เลือกอำเภอและตำบลที่ต้องการดู</small></div></div><div className="filter-controls"><label className="select-wrap"><span className="sr-only">เลือกอำเภอ</span><select value={district} onChange={(event) => { setDistrict(event.target.value); setSubdistrict("ทุกตำบล"); }}><option>ทุกอำเภอ</option>{districts.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={16} /></label><label className={`select-wrap${district === "ทุกอำเภอ" ? " disabled" : ""}`}><span className="sr-only">เลือกตำบล</span><select value={subdistrict} onChange={(event) => setSubdistrict(event.target.value)} disabled={district === "ทุกอำเภอ"}><option>ทุกตำบล</option>{options.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={16} /></label></div></section>
        <section className="latest-summary"><div className="latest-summary-top"><div><span className="summary-live-dot" /><span>รายงานตามตัวกรอง</span></div><span>{latest ? `รายงานล่าสุด ${timeAgo(latest)}` : "ยังไม่มีรายงาน"}</span></div><div className="latest-count"><strong>{areaReports.length}</strong><span>จุด</span><small>ตรงกับตัวกรองที่เลือก</small></div><div className="count-bar" aria-label="จำนวนจุดตามระดับน้ำ">{counts.map((item) => <span key={item.label} style={{ background: item.color, width: `${item.count / total * 100}%` }} title={`${item.label}: ${item.count} จุด`} />)}</div><div className="count-labels">{counts.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}<b>{item.count}</b></span>)}</div></section>
-      <section className="latest-list-section"><div className="latest-list-heading"><div><h2>รายงานในพื้นที่</h2><p>แตะรายการเพื่อเปิดตำแหน่งบนแผนที่</p></div><span className="result-count">{areaReports.length} รายงาน</span></div><div className="latest-list">{areaReports.length ? areaReports.map((report) => <ReportRow key={report.id} report={report} onClick={() => onSelectReport(report.id)} />) : <div className="empty-state"><MapPin size={24} /><h3>ยังไม่มีรายงานในพื้นที่นี้</h3><p>เลือกอำเภออื่น หรือเป็นคนแรกที่ส่งข้อมูลจากพื้นที่</p></div>}</div></section>
+       <ReportActivity reports={areaReports} />
+       <section className="latest-list-section"><div className="latest-list-heading"><div><h2>รายงานในพื้นที่</h2><p>แตะรายการเพื่อเปิดตำแหน่งบนแผนที่</p></div><span className="result-count">{areaReports.length} รายงาน</span></div><div className="latest-list">{areaReports.length ? areaReports.map((report) => <ReportRow key={report.id} report={report} onClick={() => onSelectReport(report.id)} />) : <div className="empty-state"><MapPin size={24} /><h3>ยังไม่มีรายงานในพื้นที่นี้</h3><p>เลือกอำเภออื่น หรือเป็นคนแรกที่ส่งข้อมูลจากพื้นที่</p></div>}</div></section>
     </div>
   );
 }
@@ -557,7 +817,35 @@ export default function FloodWatchApp() {
   const [view, setView] = useState<View>("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [watchedAreas, setWatchedAreas] = useState<WatchedArea[]>([]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const previousReportIds = useRef<Set<string> | null>(null);
   const [, setMinuteTick] = useState(0);
+
+  useEffect(() => {
+    try {
+      const storedAreas = window.localStorage.getItem(WATCHED_AREAS_STORAGE_KEY);
+      const parsedAreas = storedAreas ? JSON.parse(storedAreas) as WatchedArea[] : [];
+      if (Array.isArray(parsedAreas)) setWatchedAreas(parsedAreas.filter((area) => districts.includes(area.district) && (area.subdistrict === "ทุกตำบล" || subdistrictsByDistrict[area.district]?.includes(area.subdistrict))));
+      setNotificationsEnabled(window.localStorage.getItem(WATCH_NOTIFICATIONS_STORAGE_KEY) === "true");
+    } catch { /* Keep area watching available in memory if storage is blocked. */ }
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const currentIds = new Set(reports.map((report) => report.id));
+    if (!previousReportIds.current) {
+      previousReportIds.current = currentIds;
+      return;
+    }
+    const newReports = reports.filter((report) => !previousReportIds.current?.has(report.id));
+    previousReportIds.current = currentIds;
+    if (!notificationsEnabled || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    for (const report of newReports) {
+      const isWatched = watchedAreas.some((area) => area.district === report.district && (area.subdistrict === "ทุกตำบล" || area.subdistrict === report.subdistrict));
+      if (isWatched) new Notification(`มีรายงานใหม่ · ${report.subdistrict}`, { body: `${report.locationName} · ${reportFreshness(report.createdAt).label}`, tag: report.id });
+    }
+  }, [reports, loading, notificationsEnabled, watchedAreas]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setMinuteTick((tick) => tick + 1), 60_000);
@@ -597,14 +885,33 @@ export default function FloodWatchApp() {
     catch (error) { setActionError(error instanceof Error ? error.message : "บันทึกการเปลี่ยนแปลงไม่สำเร็จ"); }
   };
 
+  const saveWatchedAreas = (areas: WatchedArea[]) => {
+    setWatchedAreas(areas);
+    try { window.localStorage.setItem(WATCHED_AREAS_STORAGE_KEY, JSON.stringify(areas)); } catch { /* Keep changes for this session. */ }
+  };
+
+  const toggleAreaNotifications = async () => {
+    if (notificationsEnabled) {
+      setNotificationsEnabled(false);
+      try { window.localStorage.setItem(WATCH_NOTIFICATIONS_STORAGE_KEY, "false"); } catch { /* The setting still applies until this page closes. */ }
+      return null;
+    }
+    if (typeof Notification === "undefined") return "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน";
+    const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+    if (permission !== "granted") return "ยังไม่ได้รับอนุญาตจากเบราว์เซอร์ เปิดได้ในการตั้งค่าเว็บไซต์";
+    setNotificationsEnabled(true);
+    try { window.localStorage.setItem(WATCH_NOTIFICATIONS_STORAGE_KEY, "true"); } catch { /* Keep the setting active for this session. */ }
+    return null;
+  };
+
   return (
     <Shell view={view} onNavigate={navigate} isLive={liveMode} connected={connected}>
       {!loading && !liveMode && view !== "home" && <div className="global-connection-alert sample-connection-alert"><Info size={15} />โหมดตัวอย่าง — รายงานยังบันทึกเฉพาะในอุปกรณ์นี้และไม่ซิงก์กับผู้ใช้อื่น<button onClick={() => navigate("report")}>ส่งรายงาน <ChevronRight size={14} /></button></div>}
       {connectionError && <div className="global-connection-alert"><AlertTriangle size={15} />{connectionError}<button onClick={() => window.location.reload()}>โหลดใหม่</button></div>}
       {actionError && <div className="global-connection-alert"><AlertTriangle size={15} />{actionError}<button onClick={() => setActionError("")} aria-label="ปิด"><X size={15} /></button></div>}
-      {view === "home" && <HomeView reports={reports} onNavigate={navigate} onSelectReport={chooseReport} isLive={liveMode} connected={connected} />}
+      {view === "home" && <HomeView reports={reports} onNavigate={navigate} onSelectReport={chooseReport} isLive={liveMode} connected={connected} watchedAreas={watchedAreas} notificationsEnabled={notificationsEnabled} onWatchAreasChange={saveWatchedAreas} onToggleNotifications={toggleAreaNotifications} />}
       {view === "report" && <ReportView reports={reports} onSubmit={addReport} onNavigate={navigate} />}
-       {view === "map" && <MapView reports={reports} selectedId={selectedId} onStillFlooded={(id) => void runReportAction(() => confirmStillFlooded(id))} onReceded={(id) => void runReportAction(() => confirmReport(id, "receded"))} onFlag={(id, reason) => void runReportAction(() => flagReport(id, reason))} />}
+        {view === "map" && <MapView reports={reports} selectedId={selectedId} onSelectReport={chooseReport} onStillFlooded={(id) => void runReportAction(() => confirmStillFlooded(id))} onReceded={(id) => void runReportAction(() => confirmReport(id, "receded"))} onFlag={(id, reason) => void runReportAction(() => flagReport(id, reason))} />}
       {view === "latest" && <LatestView reports={reports} onSelectReport={chooseReport} />}
       {view === "cctv" && <CctvView onNavigate={navigate} />}
       {loading && <div className="loading-ribbon"><span className="spinner" />กำลังโหลดรายงานล่าสุด…</div>}

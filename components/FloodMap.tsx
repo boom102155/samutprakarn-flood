@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
-import { CircleMarker, MapContainer, Marker, Pane, Polygon, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Pane, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { Check, Flag, MapPin, Navigation, Waves, X } from "lucide-react";
+import { Check, Flag, MapPin, Navigation, Share2, Waves, X } from "lucide-react";
 import { FloodReport, levelColors, reportFlags, severityLabel, WaterLevel } from "@/lib/types";
 import { formatThaiDate, timeAgo } from "@/lib/useFloodReports";
 import { RainMapPoint } from "@/lib/rainForecast";
@@ -13,6 +13,7 @@ import { DistrictBoundaryFeature } from "@/lib/districtBoundaries";
 import { ThaiWaterStation, thaiWaterStationColors } from "@/lib/thaiwaterStations";
 import RainForecastOverlay from "@/components/RainForecastOverlay";
 import samutPrakanBoundary from "@/lib/samut-prakan-boundary.json";
+import { MapPosition, reportFreshness } from "@/lib/floodInsights";
 
 const center: [number, number] = [13.607, 100.66];
 const provinceRing: [number, number][] = samutPrakanBoundary.geometry.coordinates[0].map(
@@ -45,6 +46,7 @@ interface FloodMapProps {
   pickedPosition?: [number, number] | null;
   onMapPick?: (position: [number, number]) => void;
   rainForecastPoints?: RainMapPoint[];
+  routeCoordinates?: MapPosition[];
   showDistrictBoundaries?: boolean;
   className?: string;
 }
@@ -138,6 +140,28 @@ function MapCamera({ selectedId, reports }: { selectedId?: string | null; report
   return null;
 }
 
+function RouteCamera({ coordinates }: { coordinates?: MapPosition[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coordinates && coordinates.length > 1) map.fitBounds(L.latLngBounds(coordinates), { padding: [32, 32], maxZoom: 14 });
+  }, [coordinates, map]);
+  return null;
+}
+
+function OpenSelectedReport({ selectedId, reports }: { selectedId?: string | null; reports: FloodReport[] }) {
+  const map = useMap();
+  useEffect(() => {
+    const selected = reports.find((report) => report.id === selectedId);
+    if (!selected) return;
+    map.eachLayer((layer) => {
+      if (!(layer instanceof L.Marker) || !layer.getPopup()) return;
+      const iconClass = layer.options.icon?.options.className ?? "";
+      if (iconClass.includes("report-dot-shell") && layer.getLatLng().equals([selected.latitude, selected.longitude])) layer.openPopup();
+    });
+  }, [map, reports, selectedId]);
+  return null;
+}
+
 function districtCentroid(coordinates: number[][][]) {
   const ring = coordinates[0];
   let areaTwice = 0;
@@ -216,6 +240,24 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
   const [showFlags, setShowFlags] = useState(false);
   const [sentFlag, setSentFlag] = useState("");
   const [showFullPhoto, setShowFullPhoto] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
+  const freshness = reportFreshness(report.createdAt);
+
+  const shareReport = async () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "map");
+    url.searchParams.set("report", report.id);
+    try {
+      if (navigator.share) await navigator.share({ title: `รายงานน้ำท่วม: ${report.locationName}`, text: `${report.locationName} · ${freshness.label}`, url: url.toString() });
+      else {
+        await navigator.clipboard.writeText(url.toString());
+        setShareMessage("คัดลอกลิงก์แล้ว");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      setShareMessage("แชร์ไม่สำเร็จ ลองคัดลอกลิงก์จากแถบที่อยู่");
+    }
+  };
 
   useEffect(() => {
     if (!showFullPhoto) return;
@@ -248,7 +290,10 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
         <span className="popup-photo-hint">แตะรูปเพื่อดูขนาดเต็ม</span>
       </>}
       <p className="popup-timestamp" title={formatThaiDate(report.createdAt)}>{timeAgo(report.createdAt)} · {formatThaiDate(report.createdAt)}</p>
+      <div className={`popup-trust-line ${freshness.tone}`}><span>{freshness.label}</span><b>ยืนยัน {report.confirmations} ครั้ง</b></div>
       {report.condition === "receded" && <p className="receded-callout"><Check size={14} /> มีผู้แจ้งว่าน้ำลดแล้ว</p>}
+      <button type="button" className="popup-share-button" onClick={() => void shareReport()}><Share2 size={13} />แชร์ตำแหน่งรายงาน</button>
+      {shareMessage && <span className="popup-share-message" role="status">{shareMessage}</span>}
       <div className="popup-divider" />
       <p className="popup-question">ตอนนี้จุดนี้เป็นอย่างไร</p>
       <div className="popup-actions">
@@ -342,7 +387,10 @@ export default function FloodMap(props: FloodMapProps) {
         {props.rainForecastPoints && <RainForecastOverlay points={props.rainForecastPoints} bounds={provinceImageBounds} />}
         {props.showDistrictBoundaries && <DistrictBoundaries />}
         <ProvinceHighlight />
+        {props.routeCoordinates && props.routeCoordinates.length > 1 && <Polyline positions={props.routeCoordinates} pathOptions={{ color: "#1769dc", weight: 5, opacity: 0.82, lineCap: "round", lineJoin: "round" }} />}
         <MapCamera selectedId={props.selectedId} reports={props.reports} />
+        <RouteCamera coordinates={props.routeCoordinates} />
+        <OpenSelectedReport selectedId={props.selectedId} reports={props.reports} />
         <MapPickHandler enabled={Boolean(props.pickMode)} onPick={props.onMapPick} />
         {props.reports.map((report) => (
           <Marker
