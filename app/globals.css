@@ -202,6 +202,56 @@ button:disabled { cursor: wait; opacity: .7; }
 .report-dot-value { position: relative; z-index: 1; color: #fff; font-size: 8px; font-weight: 800; letter-spacing: -.035em; line-height: 1; text-shadow: 0 1px 2px rgba(8,25,44,.5); white-space: nowrap; }
 @keyframes report-radiate { 0% { opacity: .52; transform: scale(.78); } 70%, 100% { opacity: 0; transform: scale(2.15); } }
 .report-dot.is-receded { border-style: dashed; }
+.thaiwater-marker-shell { overflow: visible !important; border: 0 !important; background: transparent !important; }
+.thaiwater-marker { display: inline-flex; min-width: 58px; height: 28px; align-items: center; justify-content: center; gap: 4px; padding: 0 6px; color: #fff; border: 1.5px solid rgba(255,255,255,.94); border-radius: 7px; background: var(--station-color); box-shadow: 0 2px 7px rgba(18,35,51,.32); font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.thaiwater-marker.warning, .thaiwater-marker.stale, .thaiwater-marker.offline { color: #18344e; }
+.thaiwater-marker svg { width: 13px; height: 13px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.thaiwater-marker b { font-weight: 800; }
+.water-station-control { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.water-station-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.water-station-toggle { display: inline-flex; min-width: 0; align-items: center; gap: 9px; padding: 0; color: #264866; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.water-station-toggle > svg { flex: 0 0 auto; color: var(--blue-700); }
+.water-station-toggle > span { display: grid; gap: 1px; }
+.water-station-toggle strong { font-size: var(--type-small); font-weight: 750; }
+.water-station-toggle small { color: var(--muted); font-size: var(--type-small); }
+.water-station-toggle-indicator { position: relative; width: 30px; height: 17px; flex: 0 0 auto; margin-left: 2px; border-radius: 10px; background: #cbd6e0; transition: background .16s ease; }
+.water-station-toggle-indicator::after { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(16,42,73,.2); content: ""; transition: transform .16s ease; }
+.water-station-toggle[aria-pressed="true"] .water-station-toggle-indicator { background: var(--blue-600); }
+.water-station-toggle[aria-pressed="true"] .water-station-toggle-indicator::after { transform: translateX(13px); }
+.water-station-refresh { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; color: #426684; border: 1px solid #d9e4ed; border-radius: var(--radius-sm); background: #fff; cursor: pointer; }
+.water-station-refresh:hover:not(:disabled) { color: #1559a4; border-color: #a9c8e9; background: #f4f8fd; }
+.water-station-refresh:disabled { cursor: wait; opacity: .55; }
+.water-station-refresh.is-spinning { animation: spin .9s linear infinite; }
+.water-station-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.water-station-legend > span { display: inline-flex; align-items: center; gap: 5px; color: #526a82; font-size: var(--type-small); white-space: nowrap; }
+.water-station-legend i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
+.water-station-legend b { color: #294965; font-variant-numeric: tabular-nums; }
+.water-station-attribution { margin: 0; color: #74869a; font-size: var(--type-small); line-height: 1.5; }
+.water-station-attribution a, .thaiwater-source-link { color: #1769c8; text-underline-offset: 2px; }
+.water-station-error { display: flex; align-items: center; gap: 8px; margin: 0; color: #a33e39; font-size: var(--type-small); }
+.water-station-error button { margin-left: auto; padding: 5px 8px; color: #1559a4; border: 1px solid #c9dbf0; border-radius: var(--radius-sm); background: #f5f9ff; font-size: var(--type-small); font-weight: 700; cursor: pointer; }
+.thaiwater-popup { min-width: 248px; }
+.thaiwater-popup-heading { display: flex; align-items: center; gap: 9px; }
+.thaiwater-popup-icon { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; color: #fff; border-radius: 8px; }
+.thaiwater-popup-heading > span:last-child { min-width: 0; }
+.thaiwater-popup-heading strong, .thaiwater-popup-heading small { display: block; }
+.thaiwater-popup-heading strong { color: #183956; font-size: var(--type-small); font-weight: 750; }
+.thaiwater-popup-heading small { margin-top: 2px; color: #718398; font-size: var(--type-small); line-height: 1.45; }
+.thaiwater-status { display: flex; align-items: center; gap: 7px; margin-top: 11px; padding: 8px 9px; border: 1px solid #e1e9ef; border-radius: var(--radius-sm); background: #f8fafc; }
+.thaiwater-status i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--station-color); }
+.thaiwater-status strong { flex: 1; color: #34516a; font-size: var(--type-small); }
+.thaiwater-status span { color: #74869a; font-size: var(--type-small); }
+.thaiwater-status.critical strong { color: #b53531; }
+.thaiwater-status.warning strong { color: #88620b; }
+.thaiwater-status.stale strong, .thaiwater-status.offline strong { color: #687b8d; }
+.thaiwater-readings { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin-top: 11px; color: #61778c; font-size: var(--type-small); }
+.thaiwater-readings strong { color: #1e3e59; font-size: var(--type-control); font-variant-numeric: tabular-nums; text-align: right; }
+.thaiwater-readings .thaiwater-bank-difference { grid-column: 1 / -1; padding-top: 2px; color: #a83934; font-weight: 750; }
+.thaiwater-threshold { margin: 8px 0 0; color: #718398; font-size: var(--type-small); }
+.thaiwater-observed { margin: 10px 0 0; color: #6f8295; font-size: var(--type-small); line-height: 1.5; }
+.thaiwater-observed.is-stale { color: #a06b21; }
+.thaiwater-observed > span { display: block; margin-top: 3px; }
+.thaiwater-source-link { display: inline-block; margin-top: 7px; font-size: var(--type-small); font-weight: 700; }
 .district-label-shell { border: 0 !important; background: transparent !important; }
 .district-name-label { display: flex; width: 100%; min-height: 27px; align-items: center; justify-content: center; gap: 5px; padding: 0 7px; color: #18344e; border: 1px solid var(--district-color); border-radius: 7px; background: rgba(255,255,255,.9); box-shadow: 0 2px 7px rgba(20,42,62,.22); font-size: 10px; font-weight: 750; letter-spacing: -.015em; line-height: 1.2; text-align: center; white-space: nowrap; }
 .district-name-label i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--district-color); }
@@ -838,6 +888,9 @@ body { font-size: var(--type-body); }
   .rain-time-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rain-time-options button { padding: 0 5px; }
   .district-name-label { min-height: 25px; padding: 0 5px; font-size: 9px; }
+  .water-station-heading { align-items: flex-start; }
+  .water-station-toggle { flex: 1; }
+  .water-station-legend { gap: 6px 9px; }
   .level-choice { min-height: 88px; grid-template-columns: 40px minmax(0,1fr) 13px; gap: 5px; padding: 5px; }
   .level-choice-figure { width: 40px; height: 72px; }
   .level-figure { width: 39px; height: 72px; }

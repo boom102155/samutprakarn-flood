@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { CircleMarker, MapContainer, Marker, Pane, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Pane, Polygon, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { Check, Flag, MapPin, Navigation, X } from "lucide-react";
+import { Check, Flag, MapPin, Navigation, Waves, X } from "lucide-react";
 import { FloodReport, levelColors, reportFlags, severityLabel, WaterLevel } from "@/lib/types";
 import { formatThaiDate, timeAgo } from "@/lib/useFloodReports";
 import { RainMapPoint } from "@/lib/rainForecast";
 import { DistrictBoundaryFeature } from "@/lib/districtBoundaries";
+import { ThaiWaterStation, thaiWaterStationColors } from "@/lib/thaiwaterStations";
 import RainForecastOverlay from "@/components/RainForecastOverlay";
 import samutPrakanBoundary from "@/lib/samut-prakan-boundary.json";
 
@@ -38,6 +39,7 @@ interface FloodMapProps {
   onStillFlooded?: (id: string) => void;
   onReceded?: (id: string) => void;
   onFlag?: (id: string, reason: string) => void;
+  waterStations?: ThaiWaterStation[];
   pickMode?: boolean;
   pickedPosition?: [number, number] | null;
   onMapPick?: (position: [number, number]) => void;
@@ -70,6 +72,22 @@ function reportMarker(report: FloodReport) {
     iconSize: [42, 42],
     iconAnchor: [21, 21],
     popupAnchor: [0, -21],
+  });
+}
+
+function escapeHtml(value: string) {
+  return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function waterStationMarker(station: ThaiWaterStation) {
+  const level = station.waterLevel === null ? "—" : station.waterLevel.toFixed(2);
+  const title = escapeHtml(`${station.stationName} · ${level} ม.รทก. · ${station.conditionLabel}`);
+  return L.divIcon({
+    className: "thaiwater-marker-shell",
+    html: `<span class="thaiwater-marker ${station.condition}" style="--station-color:${thaiWaterStationColors[station.condition]}" title="${title}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8c3.5 0 3.5-3 7-3s3.5 3 7 3 3.5-3 7-3M2 15c3.5 0 3.5-3 7-3s3.5 3 7 3 3.5-3 7-3"/></svg><b>${level}</b></span>`,
+    iconSize: [62, 30],
+    iconAnchor: [31, 15],
+    popupAnchor: [0, -17],
   });
 }
 
@@ -233,6 +251,43 @@ function ReportPopup({ report, props }: { report: FloodReport; props: FloodMapPr
   );
 }
 
+function ThaiWaterStationPopup({ station }: { station: ThaiWaterStation }) {
+  const bankDifference = station.waterLevel !== null && station.bankLevel !== null
+    ? station.waterLevel - station.bankLevel
+    : null;
+  const observedAtTitle = station.observedAt ? formatThaiDate(station.observedAt) : undefined;
+
+  return (
+    <div className="map-popup thaiwater-popup">
+      <div className="thaiwater-popup-heading">
+        <span className="thaiwater-popup-icon" style={{ backgroundColor: thaiWaterStationColors[station.condition] }}><Waves size={15} /></span>
+        <span><strong>{station.waterwayName || station.stationName}</strong><small>{station.stationName}{station.district ? ` · ${station.district}` : ""}{station.subdistrict ? ` · ${station.subdistrict}` : ""}</small></span>
+      </div>
+      <div className={`thaiwater-status ${station.condition}`}>
+        <i />
+        <strong>{station.conditionLabel}</strong>
+        <span>{station.kind === "canal" ? "สถานีคลอง" : "สถานีระดับน้ำ"}</span>
+      </div>
+      <div className="thaiwater-readings">
+        <span>ระดับน้ำ</span>
+        <strong>{station.waterLevel === null ? "ไม่มีข้อมูล" : `${station.waterLevel.toFixed(2)} ม.รทก.`}</strong>
+        {station.bankLevel !== null && <>
+          <span>ระดับตลิ่ง</span>
+          <strong>{station.bankLevel.toFixed(2)} ม.รทก.</strong>
+          {bankDifference !== null && <span className="thaiwater-bank-difference">{bankDifference > 0 ? `สูงกว่าตลิ่ง ${bankDifference.toFixed(2)} ม.` : `ต่ำกว่าตลิ่ง ${Math.abs(bankDifference).toFixed(2)} ม.`}</span>}
+        </>}
+        {station.outsideLevel !== null && <><span>ระดับด้านนอก</span><strong>{station.outsideLevel.toFixed(2)} ม.รทก.</strong></>}
+      </div>
+      {(station.warningLevel !== null || station.criticalLevel !== null) && <p className="thaiwater-threshold">เกณฑ์สถานี: {station.warningLevel !== null && <>เตือน {station.warningLevel.toFixed(2)}</>}{station.warningLevel !== null && station.criticalLevel !== null && " · "}{station.criticalLevel !== null && <>วิกฤต {station.criticalLevel.toFixed(2)}</>} ม.</p>}
+      <p className={`thaiwater-observed${station.condition === "stale" ? " is-stale" : ""}`} title={observedAtTitle}>
+        {station.observedAt ? `วัดเมื่อ ${timeAgo(station.observedAt)} · ${formatThaiDate(station.observedAt)}` : "ไม่มีเวลาอัปเดตจากสถานี"}
+        {station.condition === "stale" && <span>ข้อมูลนี้เก่ากว่า 24 ชั่วโมง</span>}
+      </p>
+      <a className="thaiwater-source-link" href="https://www.thaiwater.net/water/wl" target="_blank" rel="noreferrer">สสน. · ข้อมูลจากคลังข้อมูลน้ำแห่งชาติ (ThaiWater)</a>
+    </div>
+  );
+}
+
 export default function FloodMap(props: FloodMapProps) {
   return (
     <div className={`flood-map ${props.className ?? ""}${props.pickMode ? " is-picking" : ""}`}>
@@ -259,6 +314,23 @@ export default function FloodMap(props: FloodMapProps) {
             </Popup>
           </Marker>
         ))}
+        {props.waterStations && props.waterStations.length > 0 && (
+          <Pane name="thaiwater-stations" style={{ zIndex: 625 }}>
+            {props.waterStations.map((station) => (
+              <Marker
+                key={station.id}
+                position={[station.latitude, station.longitude]}
+                icon={waterStationMarker(station)}
+                pane="thaiwater-stations"
+              >
+                <Tooltip direction="top" offset={[0, -8]}>{station.stationName} · {station.waterLevel === null ? "ไม่มีข้อมูล" : `${station.waterLevel.toFixed(2)} ม.รทก.`}</Tooltip>
+                <Popup minWidth={255} maxWidth={310} maxHeight={360} autoPan autoPanPadding={[30, 30]} keepInView closeButton closeOnClick={false}>
+                  <ThaiWaterStationPopup station={station} />
+                </Popup>
+              </Marker>
+            ))}
+          </Pane>
+        )}
         {props.pickedPosition && <CircleMarker center={props.pickedPosition} radius={9} pathOptions={{ color: "#162b42", weight: 1.5, fillColor: "#1769dc", fillOpacity: 1 }}><Popup><span className="picked-label"><Navigation size={13} /> ตำแหน่งที่เลือก</span></Popup></CircleMarker>}
       </MapContainer>
       {props.reports.length === 0 && <div className="map-empty-message"><MapPin size={17} /> ยังไม่มีรายงานในพื้นที่นี้</div>}

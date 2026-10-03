@@ -7,7 +7,7 @@ import { useCallback } from "react";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck,
   Camera, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, CloudRain,
-  Crosshair, ExternalLink, Home, Info, Map, MapPin, Phone, Plus, Radio, Search, Send, ShieldAlert, Upload, Waves, X,
+  Crosshair, ExternalLink, Home, Info, Map, MapPin, Phone, Plus, Radio, RefreshCw, Search, Send, ShieldAlert, Upload, Waves, X,
 } from "lucide-react";
 import {
   districts, FloodReport, levelColors, NewFloodReport, severityLabel,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/types";
 import { timeAgo, useFloodReports } from "@/lib/useFloodReports";
 import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
+import { ThaiWaterStation, ThaiWaterStationCondition, thaiWaterSourceUrl, thaiWaterStationColors, thaiWaterStationLabels } from "@/lib/thaiwaterStations";
 import CameraHlsFeed, { CameraFeedStatus } from "@/components/CameraHlsFeed";
 
 const FloodMap = dynamic(() => import("@/components/FloodMap"), {
@@ -356,12 +357,38 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
 
 function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { reports: FloodReport[]; selectedId: string | null; onStillFlooded: (id: string) => void; onReceded: (id: string) => void; onFlag: (id: string, reason: string) => void }) {
   const visible = reports;
+  const [stationLayerEnabled, setStationLayerEnabled] = useState(true);
+  const [thaiWaterStations, setThaiWaterStations] = useState<ThaiWaterStation[]>([]);
+  const [stationLoading, setStationLoading] = useState(true);
+  const [stationError, setStationError] = useState("");
+  const [stationRetryToken, setStationRetryToken] = useState(0);
   const [rainEnabled, setRainEnabled] = useState(false);
   const [rainLoading, setRainLoading] = useState(false);
   const [rainError, setRainError] = useState("");
   const [rainForecast, setRainForecast] = useState<RainForecastData | null>(null);
   const [forecastHours, setForecastHours] = useState(1);
   const [rainRetryToken, setRainRetryToken] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setStationLoading(true);
+    setStationError("");
+
+    void fetch("/api/thaiwater-stations", { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as { stations?: ThaiWaterStation[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "โหลดข้อมูลสถานี ThaiWater ไม่สำเร็จ");
+        setThaiWaterStations(result.stations ?? []);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setStationError(error instanceof Error ? error.message : "โหลดข้อมูลสถานี ThaiWater ไม่สำเร็จ");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setStationLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [stationRetryToken]);
 
   useEffect(() => {
     if (!rainEnabled || rainForecast) return;
@@ -411,12 +438,33 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { r
   const forecastUpdatedLabel = rainForecast
     ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(rainForecast.generatedAt))
     : "";
+  const stationConditionCounts = (["critical", "warning", "normal", "stale", "offline"] as ThaiWaterStationCondition[]).map((condition) => ({
+    condition,
+    count: thaiWaterStations.filter((station) => station.condition === condition).length,
+  }));
+
   return (
     <div className="content-page map-page">
       <PageHeader title="แผนที่ระดับน้ำ" description="สถานการณ์จากรายงานของคนในพื้นที่สมุทรปราการ" action={<div className="map-total"><span className="status-pulse" />{visible.length} จุดบนแผนที่</div>} />
       <div className="map-legend-block">
         <WaterLegend />
         <p><Info size={15} />จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
+        <section className={`water-station-control${stationLayerEnabled ? " is-enabled" : ""}`} aria-label="ชั้นข้อมูลสถานีระดับน้ำ ThaiWater">
+          <div className="water-station-heading">
+            <button type="button" className="water-station-toggle" aria-pressed={stationLayerEnabled} onClick={() => setStationLayerEnabled((enabled) => !enabled)}>
+              <Waves size={18} />
+              <span><strong>สถานีระดับน้ำ ThaiWater</strong><small>{stationLoading ? "กำลังโหลดข้อมูลสถานี…" : stationError ? "เชื่อมต่อข้อมูลไม่ได้" : `${thaiWaterStations.length} สถานีในสมุทรปราการ`}</small></span>
+              <i className="water-station-toggle-indicator" />
+            </button>
+            <button type="button" className="water-station-refresh" onClick={() => setStationRetryToken((token) => token + 1)} disabled={stationLoading} aria-label="โหลดข้อมูลสถานี ThaiWater ล่าสุด" title="โหลดข้อมูลล่าสุด"><RefreshCw size={15} className={stationLoading ? "is-spinning" : ""} /></button>
+          </div>
+          {stationError ? <p className="water-station-error" role="alert">{stationError}<button type="button" onClick={() => setStationRetryToken((token) => token + 1)}>ลองใหม่</button></p> : <>
+            <div className="water-station-legend" aria-label="สถานะสถานี ThaiWater">
+              {stationConditionCounts.filter(({ count }) => count > 0).map(({ condition, count }) => <span key={condition}><i style={{ backgroundColor: thaiWaterStationColors[condition] }} />{thaiWaterStationLabels[condition]}<b>{count}</b></span>)}
+            </div>
+            <p className="water-station-attribution">ระดับน้ำเป็น ม.รทก. · สถานะข้อมูลเก่าหมายถึงอัปเดตเกิน 24 ชม. · <a href={thaiWaterSourceUrl} target="_blank" rel="noreferrer">คลังข้อมูลน้ำแห่งชาติ (ThaiWater)</a></p>
+          </>}
+        </section>
         <section className={`rain-forecast-control${rainEnabled ? " is-enabled" : ""}`} aria-label="ชั้นพยากรณ์ฝน">
           <div className="rain-forecast-heading">
             <button type="button" className="rain-layer-toggle" aria-pressed={rainEnabled} onClick={() => setRainEnabled((enabled) => !enabled)}>
@@ -446,8 +494,8 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag }: { r
           </>}
         </section>
       </div>
-      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} showDistrictBoundaries className="full-map" /></div>
-      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span><span><a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer">ขอบเขตอำเภอ geoBoundaries · CC BY 3.0 IGO</a></span></div>
+      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} waterStations={stationLayerEnabled ? thaiWaterStations : undefined} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} showDistrictBoundaries className="full-map" /></div>
+      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span>{stationLayerEnabled && <span><Waves size={15} />{thaiWaterStations.length} สถานี ThaiWater</span>}<span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span><span><a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer">ขอบเขตอำเภอ geoBoundaries · CC BY 3.0 IGO</a></span></div>
     </div>
   );
 }
