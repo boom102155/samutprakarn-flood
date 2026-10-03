@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { CircleMarker, MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Pane, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Check, Flag, MapPin, Navigation, X } from "lucide-react";
-import { FloodReport, levelColors, reportFlags, severityLabel } from "@/lib/types";
+import { FloodReport, levelColors, reportFlags, severityLabel, WaterLevel } from "@/lib/types";
 import { formatThaiDate, timeAgo } from "@/lib/useFloodReports";
 import { RainMapPoint } from "@/lib/rainForecast";
+import { DistrictBoundaryFeature } from "@/lib/districtBoundaries";
 import RainForecastOverlay from "@/components/RainForecastOverlay";
 import samutPrakanBoundary from "@/lib/samut-prakan-boundary.json";
 
@@ -20,6 +21,15 @@ const provinceImageBounds: [[number, number], [number, number]] = [
   [provinceBounds.getSouth(), provinceBounds.getWest()],
   [provinceBounds.getNorth(), provinceBounds.getEast()],
 ];
+const markerDepthLabels: Record<WaterLevel, string> = {
+  "แห้ง": "0",
+  "ต่ำกว่าข้อเท้า < 10 ซม.": "<10",
+  "ข้อเท้า–หัวเข่า 10–50 ซม.": "10–50",
+  "หัวเข่า–เอว 50–100 ซม.": "50–100",
+  "เอว–หน้าอก 100–130 ซม.": "100–130",
+  "เลยหน้าอก 130–180 ซม.": "130–180",
+  "มิดหัว–ท่วมหลังคา > 180 ซม.": "180+",
+};
 
 interface FloodMapProps {
   reports: FloodReport[];
@@ -32,17 +42,34 @@ interface FloodMapProps {
   pickedPosition?: [number, number] | null;
   onMapPick?: (position: [number, number]) => void;
   rainForecastPoints?: RainMapPoint[];
+  showDistrictBoundaries?: boolean;
   className?: string;
 }
 
+const districtColors: Record<string, string> = {
+  "Bang Bo": "#527fbc",
+  "Bang Phli": "#3a9794",
+  "Bang Sao Thong": "#7968a8",
+  "Mueang Samut Prakan": "#568ba6",
+  "Phra Pradaeng": "#aa7198",
+  "Phra Samut Chedi": "#6d9060",
+};
+
 function reportMarker(report: FloodReport) {
   const color = levelColors[report.waterLevel];
+  const depthLabel = markerDepthLabels[report.waterLevel];
+  const escapedLabel = depthLabel.replace("<", "&lt;");
+  const title = report.waterLevel === "แห้ง"
+    ? severityLabel(report.waterLevel)
+    : `${depthLabel} ซม. · ${severityLabel(report.waterLevel)}`;
+  const escapedTitle = title.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
+  const pulseDelay = Array.from(report.id).reduce((sum, character) => sum + character.charCodeAt(0), 0) % 3600;
   return L.divIcon({
     className: "report-dot-shell",
-    html: `<span class="report-dot${report.condition === "receded" ? " is-receded" : ""}" style="--marker-color:${color}"></span>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -13],
+    html: `<span class="report-dot${report.condition === "receded" ? " is-receded" : ""}" style="--marker-color:${color};--marker-pulse-delay:-${pulseDelay}ms" title="${escapedTitle}" aria-label="${escapedTitle}"><span class="report-dot-value">${escapedLabel}</span></span>`,
+    iconSize: [42, 42],
+    iconAnchor: [21, 21],
+    popupAnchor: [0, -21],
   });
 }
 
@@ -90,6 +117,71 @@ function MapCamera({ selectedId, reports }: { selectedId?: string | null; report
     if (selected) map.flyTo([selected.latitude, selected.longitude], Math.max(map.getZoom(), 14), { duration: 0.7 });
   }, [map, reports, selectedId]);
   return null;
+}
+
+function districtCentroid(coordinates: number[][][]) {
+  const ring = coordinates[0];
+  let areaTwice = 0;
+  let longitudeTotal = 0;
+  let latitudeTotal = 0;
+
+  for (let index = 0; index < ring.length - 1; index += 1) {
+    const [longitude, latitude] = ring[index];
+    const [nextLongitude, nextLatitude] = ring[index + 1];
+    const cross = longitude * nextLatitude - nextLongitude * latitude;
+    areaTwice += cross;
+    longitudeTotal += (longitude + nextLongitude) * cross;
+    latitudeTotal += (latitude + nextLatitude) * cross;
+  }
+
+  if (Math.abs(areaTwice) < 1e-10) {
+    const longitude = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
+    const latitude = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
+    return [latitude, longitude] as [number, number];
+  }
+
+  return [latitudeTotal / (3 * areaTwice), longitudeTotal / (3 * areaTwice)] as [number, number];
+}
+
+function DistrictBoundaries() {
+  const [features, setFeatures] = useState<DistrictBoundaryFeature[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/district-boundaries", { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as { features?: DistrictBoundaryFeature[] };
+        if (response.ok && result.features?.length === 6) setFeatures(result.features);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  if (!features.length) return null;
+
+  return (
+    <>
+      {features.map((feature) => {
+        const color = districtColors[feature.properties.sourceName];
+        const positions = feature.geometry.coordinates.map((ring) => ring.map(([longitude, latitude]) => [latitude, longitude] as [number, number]));
+        return <Polygon key={feature.properties.name} positions={positions} pathOptions={{ color, weight: 1.8, opacity: 0.9, fillColor: color, fillOpacity: 0.16, lineJoin: "round" }} interactive={false} />;
+      })}
+      <Pane name="district-labels" style={{ zIndex: 550, pointerEvents: "none" }}>
+        {features.map((feature) => {
+          const color = districtColors[feature.properties.sourceName];
+          const label = feature.properties.name;
+          const width = Math.max(104, Math.min(150, label.length * 6 + 24));
+          const icon = L.divIcon({
+            className: "district-label-shell",
+            html: `<span class="district-name-label" style="--district-color:${color}"><i></i>${label}</span>`,
+            iconSize: [width, 28],
+            iconAnchor: [width / 2, 14],
+          });
+          return <Marker key={feature.properties.name} position={districtCentroid(feature.geometry.coordinates)} icon={icon} pane="district-labels" interactive={false} />;
+        })}
+      </Pane>
+    </>
+  );
 }
 
 function MapPickHandler({ enabled, onPick }: { enabled: boolean; onPick?: (position: [number, number]) => void }) {
@@ -151,6 +243,7 @@ export default function FloodMap(props: FloodMapProps) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {props.rainForecastPoints && <RainForecastOverlay points={props.rainForecastPoints} bounds={provinceImageBounds} />}
+        {props.showDistrictBoundaries && <DistrictBoundaries />}
         <ProvinceHighlight />
         <MapCamera selectedId={props.selectedId} reports={props.reports} />
         <MapPickHandler enabled={Boolean(props.pickMode)} onPick={props.onMapPick} />

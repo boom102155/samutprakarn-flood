@@ -425,8 +425,8 @@ function MapView({ reports, selectedId, onSelect, onStillFlooded, onReceded, onF
           </>}
         </section>
       </div>
-      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} className="full-map" /></div>
-      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span></div>
+      <div className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onSelect={onSelect} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} showDistrictBoundaries className="full-map" /></div>
+      <div className="map-bottom-note"><span><MapPin size={15} /> {visible.length} รายงานทั้งหมด</span><span><Clock3 size={15} /> ทุกจุดแสดงเวลาที่ส่งรายงานล่าสุด</span><span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a></span><span><a href="https://www.geoboundaries.org/" target="_blank" rel="noreferrer">ขอบเขตอำเภอ geoBoundaries · CC BY 3.0 IGO</a></span></div>
     </div>
   );
 }
