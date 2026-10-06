@@ -7,7 +7,7 @@ import { useCallback } from "react";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck,
   Bell, Camera, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, CloudRain,
-  Crosshair, ExternalLink, Home, Info, Map, MapPin, Phone, Plus, Radio, RefreshCw, Route, Search, Send, ShieldAlert, Upload, Waves, X,
+  Crosshair, ExternalLink, Home, Info, Map, MapPin, MessageCircle, Phone, Plus, Radio, RefreshCw, Route, Search, Send, ShieldAlert, Upload, Waves, X,
 } from "lucide-react";
 import {
   districts, FloodReport, levelColors, NewFloodReport, severityLabel,
@@ -113,6 +113,11 @@ function Shell({ view, onNavigate, children, isLive, connected }: { view: View; 
             <div><b>{isLive ? (connected ? "เชื่อมต่อแล้ว" : "รอเชื่อมต่อ") : "โหมดตัวอย่าง"}</b><small>{isLive ? (connected ? "รายงานเรียลไทม์" : "ตรวจสอบการเชื่อมต่อ") : "ข้อมูลตัวอย่างในเครื่อง"}</small></div>
           </div>
           <a className="side-help" href="tel:1669"><span className="help-icon"><Phone size={16} /></span><span><b>เหตุฉุกเฉิน</b><small>โทร 1669</small></span><ChevronRight size={15} /></a>
+          <a className="side-line-oa" href="https://line.me/R/ti/p/@565nqqyz" target="_blank" rel="noreferrer" aria-label="เพิ่มเพื่อน LINE OA @ปราการอากาศ">
+            <span className="line-oa-icon"><MessageCircle size={19} strokeWidth={2.2} /></span>
+            <span><b>@ปราการอากาศ</b><small>เพิ่มเพื่อนใน LINE OA</small></span>
+            <ExternalLink size={14} aria-hidden="true" />
+          </a>
           <span className="sidebar-footnote">ข้อมูลเพื่อการติดตามสถานการณ์<br />โปรดตรวจสอบหน้างานก่อนเดินทาง</span>
         </div>
       </aside>
