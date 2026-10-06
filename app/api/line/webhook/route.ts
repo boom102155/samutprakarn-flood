@@ -128,6 +128,7 @@ async function handleEvent(event: LineEvent) {
         status: "awaiting_consent",
         latitude: null,
         longitude: null,
+        rain_hourly_enabled: false,
         consented_at: null,
         unsubscribed_at: null,
         updated_at: new Date().toISOString(),
@@ -145,6 +146,7 @@ async function handleEvent(event: LineEvent) {
       status: "unfollowed",
       latitude: null,
       longitude: null,
+      rain_hourly_enabled: false,
       consented_at: null,
       unsubscribed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -165,6 +167,7 @@ async function handleEvent(event: LineEvent) {
         status: "awaiting_consent",
         latitude: null,
         longitude: null,
+        rain_hourly_enabled: false,
         consented_at: null,
         unsubscribed_at: null,
         updated_at: new Date().toISOString(),
@@ -202,6 +205,7 @@ async function handleEvent(event: LineEvent) {
         status: "awaiting_consent",
         latitude: null,
         longitude: null,
+        rain_hourly_enabled: false,
         consented_at: null,
         unsubscribed_at: null,
         updated_at: new Date().toISOString(),
@@ -211,12 +215,61 @@ async function handleEvent(event: LineEvent) {
       return;
     }
 
+    if (["เปิดแจ้งฝน", "รับแจ้งฝน", "พยากรณ์ฝนรายชั่วโมง"].includes(command)) {
+      const { data: subscription, error: readError } = await supabase
+        .from("line_weather_subscriptions")
+        .select("status, consented_at")
+        .eq("line_user_id", lineUserId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (subscription?.status !== "active" || !subscription.consented_at) {
+        await replyGettingStarted(event.replyToken);
+        return;
+      }
+
+      const { error } = await supabase.from("line_weather_subscriptions").update({
+        rain_hourly_enabled: true,
+        updated_at: new Date().toISOString(),
+      }).eq("line_user_id", lineUserId);
+      if (error) throw error;
+      await reply(event.replyToken, "🌧️ เปิดรับพยากรณ์ฝนรายชั่วโมงแล้วครับ จะแจ้งเฉพาะเมื่อ TMD คาดว่าพื้นที่ใกล้ตำแหน่งของคุณมีฝนตั้งแต่ 0.2 มม./ชม. ขึ้นไป และส่งไม่เกิน 1 ข้อความต่อชั่วโมง", [
+        messageAction("ปิดแจ้งฝน", "ปิดแจ้งฝน"),
+        messageAction("เปลี่ยนตำแหน่ง", "ตำแหน่ง"),
+      ]);
+      return;
+    }
+
+    if (["ปิดแจ้งฝน", "หยุดพยากรณ์ฝน"].includes(command)) {
+      const { data: subscription, error: readError } = await supabase
+        .from("line_weather_subscriptions")
+        .select("status")
+        .eq("line_user_id", lineUserId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (subscription?.status !== "active") {
+        await replyGettingStarted(event.replyToken);
+        return;
+      }
+
+      const { error } = await supabase.from("line_weather_subscriptions").update({
+        rain_hourly_enabled: false,
+        updated_at: new Date().toISOString(),
+      }).eq("line_user_id", lineUserId);
+      if (error) throw error;
+      await reply(event.replyToken, "ปิดแจ้งพยากรณ์ฝนรายชั่วโมงแล้วครับ ประกาศเตือนสภาพอากาศสำคัญยังเปิดอยู่ตามเดิม", [
+        messageAction("รับแจ้งฝน", "เปิดแจ้งฝน"),
+        messageAction("สถานะ", "สถานะ"),
+      ]);
+      return;
+    }
+
     if (["หยุด", "ยกเลิก", "ปิดแจ้งเตือน", "stop", "unsubscribe"].includes(command)) {
       const { error } = await supabase.from("line_weather_subscriptions").upsert({
         line_user_id: lineUserId,
         status: "unsubscribed",
         latitude: null,
         longitude: null,
+        rain_hourly_enabled: false,
         consented_at: null,
         unsubscribed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -251,17 +304,21 @@ async function handleEvent(event: LineEvent) {
     if (["สถานะ", "status"].includes(command)) {
       const { data: subscription, error } = await supabase
         .from("line_weather_subscriptions")
-        .select("status, latitude, longitude")
+        .select("status, latitude, longitude, rain_hourly_enabled")
         .eq("line_user_id", lineUserId)
         .maybeSingle();
       if (error) throw error;
       const statusMessage = subscription?.status === "active"
-        ? `กำลังรับประกาศเตือนในสมุทรปราการ พื้นที่ประมาณ ${Number(subscription.latitude).toFixed(2)}, ${Number(subscription.longitude).toFixed(2)}\nพิมพ์ “ตำแหน่ง” เพื่อเปลี่ยนพื้นที่ หรือ “หยุด” เพื่อยกเลิก`
+        ? `กำลังรับประกาศเตือนในสมุทรปราการ พื้นที่ประมาณ ${Number(subscription.latitude).toFixed(2)}, ${Number(subscription.longitude).toFixed(2)}\nพยากรณ์ฝนรายชั่วโมง: ${subscription.rain_hourly_enabled ? "เปิดอยู่" : "ปิดอยู่"}`
         : subscription?.status === "unsubscribed"
           ? "ยังไม่ได้สมัครรับแจ้งเตือน พิมพ์ “สมัคร” เพื่อเริ่มต้น"
           : "ยังตั้งค่าไม่เสร็จ พิมพ์ “สมัคร” เพื่อเริ่มต้น";
       await reply(event.replyToken, statusMessage, subscription?.status === "active"
-        ? [messageAction("เปลี่ยนตำแหน่ง", "ตำแหน่ง"), messageAction("หยุดรับแจ้งเตือน", "หยุด")]
+        ? [
+          messageAction("เปลี่ยนตำแหน่ง", "ตำแหน่ง"),
+          messageAction(subscription.rain_hourly_enabled ? "ปิดแจ้งฝน" : "รับแจ้งฝน", subscription.rain_hourly_enabled ? "ปิดแจ้งฝน" : "เปิดแจ้งฝน"),
+          messageAction("หยุดรับแจ้งเตือน", "หยุด"),
+        ]
         : [messageAction("เริ่มสมัคร", "สมัคร")]);
       return;
     }
@@ -300,7 +357,8 @@ async function handleEvent(event: LineEvent) {
       updated_at: new Date().toISOString(),
     }, { onConflict: "line_user_id" });
     if (error) throw error;
-    await reply(event.replyToken, "✅ สมัครรับประกาศเตือนสภาพอากาศสำคัญในสมุทรปราการแล้ว\nบันทึกตำแหน่งแบบปัดเศษประมาณ 1 กม. และไม่ติดตามตำแหน่งต่อเนื่อง", [
+    await reply(event.replyToken, "✅ สมัครรับประกาศเตือนสภาพอากาศสำคัญในสมุทรปราการแล้ว\nบันทึกตำแหน่งแบบปัดเศษประมาณ 1 กม. และไม่ติดตามตำแหน่งต่อเนื่อง\n\nหากต้องการรับแจ้งเมื่อคาดว่าจะมีฝนในพื้นที่ กด “รับแจ้งฝน” เพิ่มเติมได้ครับ", [
+      messageAction("รับแจ้งฝน", "เปิดแจ้งฝน"),
       messageAction("เปลี่ยนตำแหน่ง", "ตำแหน่ง"),
       messageAction("หยุดรับแจ้งเตือน", "หยุด"),
     ]);

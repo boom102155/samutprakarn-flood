@@ -68,12 +68,16 @@ create table if not exists public.line_weather_subscriptions (
   latitude double precision check (latitude between 5 and 21),
   longitude double precision check (longitude between 97 and 106),
   alert_types text[] not null default array['all']::text[],
+  rain_hourly_enabled boolean not null default false,
   consented_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unsubscribed_at timestamptz,
   check ((latitude is null) = (longitude is null))
 );
+
+alter table public.line_weather_subscriptions
+  add column if not exists rain_hourly_enabled boolean not null default false;
 
 create index if not exists line_weather_subscriptions_active_idx
   on public.line_weather_subscriptions (status) where status = 'active';

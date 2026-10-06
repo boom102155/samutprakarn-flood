@@ -12,12 +12,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_MULTICAST_RECIPIENTS = 500;
+const RAIN_ALERT_THRESHOLD_MM_PER_HOUR = 0.2;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 const TMD_WARNING_URL = "https://data.tmd.go.th/api/WeatherWarningNews/v2/";
 const TMD_HOURLY_PLACE_URL = "https://data.tmd.go.th/nwpapi/v1/forecast/location/hourly/place";
 
 interface LineSubscription {
   line_user_id: string;
   alert_types: string[] | null;
+  rain_hourly_enabled: boolean | null;
   latitude: number | null;
   longitude: number | null;
 }
@@ -51,7 +54,7 @@ async function activeSubscriptions(): Promise<LineSubscription[]> {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from("line_weather_subscriptions")
-      .select("line_user_id, alert_types, latitude, longitude")
+      .select("line_user_id, alert_types, rain_hourly_enabled, latitude, longitude")
       .eq("status", "active")
       .order("line_user_id")
       .range(from, from + pageSize - 1);
@@ -239,12 +242,90 @@ function formatForecastAlert(zone: ForecastZone, forecast: TmdHourlyForecast, co
   ].join("\n\n").slice(0, 4900);
 }
 
+function formatRainHourlyAlert(zone: ForecastZone, forecast: TmdHourlyForecast) {
+  const forecastStart = new Date(forecast.time);
+  const forecastEnd = new Date(forecastStart.getTime() + ONE_HOUR_MS);
+  const formatTime = (date: Date) => new Intl.DateTimeFormat("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Bangkok",
+  }).format(date);
+  const readings = [
+    forecast.temperatureC !== null ? `อุณหภูมิประมาณ ${forecast.temperatureC.toFixed(1)}°C` : "",
+    forecast.humidityPercent !== null ? `ความชื้น ${Math.round(forecast.humidityPercent)}%` : "",
+  ].filter(Boolean).join(" · ");
+
+  return [
+    "🌧️ พยากรณ์ฝนรายชั่วโมง",
+    `พื้นที่: ${zone.forecastLocation.locationName || "สมุทรปราการ"}`,
+    `ช่วงเวลา: ${formatTime(forecastStart)}–${formatTime(forecastEnd)} น.`,
+    `คาดว่ามีฝนประมาณ ${forecast.rainMm?.toFixed(1) ?? "—"} มม./ชม.${readings ? ` · ${readings}` : ""}`,
+    "ควรพกร่มและเผื่อเวลาเดินทาง",
+    "พยากรณ์จากแบบจำลอง TMD ไม่ใช่การตรวจวัดฝนจริง ณ จุดนั้น และอาจเปลี่ยนแปลงได้",
+    "ปิดแจ้งฝนรายชั่วโมง: พิมพ์ “ปิดแจ้งฝน”",
+  ].join("\n\n").slice(0, 4900);
+}
+
+async function deliverHourlyRainNotifications(
+  zones: ForecastZone[],
+  categoriesWithOfficialWarnings: Set<WeatherAlertCategory>,
+) {
+  const optedInZones = zones.filter((zone) => zone.subscribers.some((subscriber) => subscriber.rain_hourly_enabled));
+  if (!optedInZones.length) return { status: "no_opted_in_subscribers", zones: 0, rainForecasts: 0, sent: 0, failed: 0 };
+  if (categoriesWithOfficialWarnings.has("rain")) {
+    return { status: "covered_by_official_rain_warning", zones: optedInZones.length, rainForecasts: 0, sent: 0, failed: 0 };
+  }
+
+  const now = Date.now();
+  const currentHourStart = Math.floor(now / ONE_HOUR_MS) * ONE_HOUR_MS;
+  const nextHourStart = currentHourStart + ONE_HOUR_MS;
+  let rainForecasts = 0;
+  let sent = 0;
+  let failed = 0;
+
+  for (const zone of optedInZones) {
+    const currentHourForecast = zone.forecasts.find((forecast) => {
+      const forecastTime = Date.parse(forecast.time);
+      return Number.isFinite(forecastTime)
+        && forecastTime >= currentHourStart
+        && forecastTime < nextHourStart
+        && forecast.rainMm !== null
+        && forecast.rainMm >= RAIN_ALERT_THRESHOLD_MM_PER_HOUR;
+    });
+    if (!currentHourForecast) continue;
+
+    // Strong-rain and thunderstorm condition codes already have their own alert path.
+    if (currentHourForecast.conditionCode !== null && categoryForTmdCondition(currentHourForecast.conditionCode)) continue;
+
+    const recipients = zone.subscribers
+      .filter((subscriber) => subscriber.rain_hourly_enabled)
+      .map((subscriber) => subscriber.line_user_id);
+    if (!recipients.length) continue;
+
+    rainForecasts += 1;
+    const alertKey = createHash("sha256")
+      .update(`tmd-rain-hourly|${zone.forecastLocation.locationKey}|${currentHourForecast.time}`)
+      .digest("hex");
+    const result = await deliverWarning(alertKey, formatRainHourlyAlert(zone, currentHourForecast), recipients);
+    sent += result.sent;
+    failed += result.failed;
+  }
+
+  return { status: "checked", zones: optedInZones.length, rainForecasts, sent, failed };
+}
+
 async function deliverLocalForecastAlerts(
   subscriptions: LineSubscription[],
   categoriesWithOfficialWarnings: Set<WeatherAlertCategory>,
 ) {
   const accessToken = process.env.TMD_NWP_ACCESS_TOKEN;
-  if (!accessToken) return { status: "token_not_configured", zones: 0, sent: 0, failed: 0 };
+  if (!accessToken) return {
+    status: "token_not_configured",
+    zones: 0,
+    sent: 0,
+    failed: 0,
+    rainHourly: { status: "token_not_configured", zones: 0, rainForecasts: 0, sent: 0, failed: 0 },
+  };
 
   const forecasts = await fetchTmdHourlyForecasts(accessToken);
   const zones = groupSubscribersByForecastZone(subscriptions, forecasts);
@@ -278,7 +359,8 @@ async function deliverLocalForecastAlerts(
     }
   }
 
-  return { status: "checked", zones: zones.length, sent, failed };
+  const rainHourly = await deliverHourlyRainNotifications(zones, categoriesWithOfficialWarnings);
+  return { status: "checked", zones: zones.length, sent, failed, rainHourly };
 }
 
 export async function GET(request: Request) {
@@ -324,14 +406,20 @@ export async function GET(request: Request) {
       results.push({ issueNo: warning.issueNo, category: warning.categories, ...delivery });
     }
 
-    let localForecast: { status: string; zones: number; sent: number; failed: number };
+    let localForecast: Awaited<ReturnType<typeof deliverLocalForecastAlerts>>;
     try {
       localForecast = await deliverLocalForecastAlerts(subscriptions, officialWarningCategories);
-      totalSent += localForecast.sent;
-      totalFailed += localForecast.failed;
+      totalSent += localForecast.sent + localForecast.rainHourly.sent;
+      totalFailed += localForecast.failed + localForecast.rainHourly.failed;
     } catch (error) {
       console.error("TMD hourly forecast alert failed", error instanceof Error ? error.message : "unknown error");
-      localForecast = { status: "failed", zones: 0, sent: 0, failed: 0 };
+      localForecast = {
+        status: "failed",
+        zones: 0,
+        sent: 0,
+        failed: 0,
+        rainHourly: { status: "failed", zones: 0, rainForecasts: 0, sent: 0, failed: 0 },
+      };
     }
 
     return Response.json({
