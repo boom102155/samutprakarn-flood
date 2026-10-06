@@ -383,6 +383,10 @@ function ThaiWaterStationPopup({ station }: { station: ThaiWaterStation }) {
 }
 
 export default function FloodMap(props: FloodMapProps) {
+  const popupMaxHeight = typeof window === "undefined"
+    ? 320
+    : Math.max(160, Math.min(420, Math.floor(window.innerHeight * 0.5) - 90));
+
   return (
     <div className={`flood-map ${props.className ?? ""}${props.pickMode ? " is-picking" : ""}`}>
       {props.pickMode && <div className="map-pick-hint"><MapPin size={15} /> แตะบนแผนที่เพื่อเลือกตำแหน่ง</div>}
@@ -411,7 +415,7 @@ export default function FloodMap(props: FloodMapProps) {
             icon={reportMarker(report)}
             eventHandlers={{ click: () => props.onSelect?.(report) }}
           >
-            <Popup minWidth={248} maxWidth={300} autoPan autoPanPadding={[30, 30]} keepInView closeButton closeOnClick={false}>
+            <Popup minWidth={248} maxWidth={300} maxHeight={popupMaxHeight} autoPan autoPanPadding={[16, 16]} closeButton closeOnClick={false}>
               <ReportPopup report={report} props={props} />
             </Popup>
           </Marker>
@@ -426,7 +430,7 @@ export default function FloodMap(props: FloodMapProps) {
                 pane="thaiwater-stations"
               >
                 <Tooltip direction="top" offset={[0, -8]}>{station.stationName} · {station.waterLevel === null ? "ไม่มีข้อมูล" : `${station.waterLevel.toFixed(2)} ม.รทก.`}</Tooltip>
-                <Popup minWidth={255} maxWidth={310} maxHeight={360} autoPan autoPanPadding={[30, 30]} keepInView closeButton closeOnClick={false}>
+                <Popup minWidth={255} maxWidth={310} maxHeight={popupMaxHeight} autoPan autoPanPadding={[16, 16]} closeButton closeOnClick={false}>
                   <ThaiWaterStationPopup station={station} />
                 </Popup>
               </Marker>
