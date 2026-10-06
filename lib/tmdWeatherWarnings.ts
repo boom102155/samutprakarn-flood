@@ -14,6 +14,18 @@ export interface TmdWeatherWarning {
   sourceUrl: string;
 }
 
+export interface TmdHourlyForecast {
+  locationKey: string;
+  locationName: string;
+  latitude: number;
+  longitude: number;
+  time: string;
+  conditionCode: number | null;
+  temperatureC: number | null;
+  humidityPercent: number | null;
+  rainMm: number | null;
+}
+
 function decodeXml(value: string) {
   return value
     .replace(/&#x([\da-f]+);/gi, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
@@ -102,4 +114,60 @@ export function formatWeatherAlert(warning: TmdWeatherWarning) {
     "ข้อความนี้ส่งตามพื้นที่สมุทรปราการที่คุณแชร์ไว้ หากไม่ต้องการรับต่อ พิมพ์ “หยุด”",
   ].filter(Boolean);
   return paragraphs.join("\n\n").slice(0, 4900);
+}
+
+function finiteNumber(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function parseTmdHourlyForecasts(payload: unknown): TmdHourlyForecast[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const forecastRows = root.WeatherForcasts ?? root.WeatherForecasts ?? root.weatherForecasts;
+  if (!Array.isArray(forecastRows)) return [];
+
+  return forecastRows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const record = row as Record<string, unknown>;
+    const location = (record.location && typeof record.location === "object")
+      ? record.location as Record<string, unknown>
+      : {};
+    const latitude = finiteNumber(location.lat ?? location.latitude);
+    const longitude = finiteNumber(location.lon ?? location.longitude);
+    const forecasts = record.forecasts;
+    if (latitude === null || longitude === null || !Array.isArray(forecasts)) return [];
+
+    const placeName = [location.tambon, location.amphoe, location.province]
+      .filter((part): part is string => typeof part === "string" && Boolean(part.trim()))
+      .join(" · ");
+    const locationKey = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+
+    return forecasts.flatMap((forecast) => {
+      if (!forecast || typeof forecast !== "object") return [];
+      const point = forecast as Record<string, unknown>;
+      const time = typeof point.time === "string" ? point.time : "";
+      const data = point.data && typeof point.data === "object" ? point.data as Record<string, unknown> : {};
+      if (!time || finiteNumber(data.cond) === null) return [];
+      return [{
+        locationKey,
+        locationName: placeName || "สมุทรปราการ",
+        latitude,
+        longitude,
+        time,
+        conditionCode: finiteNumber(data.cond),
+        temperatureC: finiteNumber(data.tc),
+        humidityPercent: finiteNumber(data.rh),
+        rainMm: finiteNumber(data.rain),
+      }];
+    });
+  });
+}
+
+export function categoryForTmdCondition(code: number): WeatherAlertCategory | null {
+  if (code === 7) return "rain";
+  if (code === 8) return "storm";
+  if (code === 9 || code === 10) return "cold";
+  if (code === 12) return "heat";
+  return null;
 }

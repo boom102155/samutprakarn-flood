@@ -44,22 +44,13 @@ https://<โดเมนที่ deploy แล้ว>/api/line/webhook
 - `LINE_CHANNEL_SECRET` และ `LINE_CHANNEL_ACCESS_TOKEN` จาก Messaging API channel ที่เชื่อมกับ OA
 - `SUPABASE_SERVICE_ROLE_KEY` จาก Supabase เพื่อให้ webhook เขียน subscription และบันทึกผลการส่งได้; รัน `supabase/schema.sql` อีกครั้งเพื่อสร้างตาราง LINE
 - `CRON_SECRET` เป็นค่าสุ่มยาวสำหรับป้องกัน endpoint ตรวจอากาศ
-- `TMD_API_UID` / `TMD_API_KEY` ใช้ค่า production ที่ลงทะเบียนกับ TMD (ค่า `demo` ในตัวอย่างมีไว้ทดสอบ)
+- `TMD_API_UID` / `TMD_API_KEY` ใช้กับ WeatherWarningNews (ตัวอย่างทางการคือ `demo` / `demokey`; ใช้บัญชี production หากลงทะเบียนไว้)
+- `TMD_NWP_ACCESS_TOKEN` คือ OAuth Access Token จาก [TMD Weather Forecast API](https://data.tmd.go.th/nwpapi/login) สำหรับพยากรณ์รายชั่วโมงตามอำเภอ/ตำบล เก็บไว้ใน server environment เท่านั้น
 
 ผู้ใช้เพิ่มเพื่อน OA แล้วพิมพ์ `สมัคร` → `ยินยอม` → แชร์ตำแหน่งผ่าน `+` → `ตำแหน่ง`; ระบบยอมรับเฉพาะตำแหน่งในสมุทรปราการและเก็บพิกัดที่ปัดเศษประมาณ 1 กม. พิมพ์ `หยุด` เพื่อยกเลิกและลบตำแหน่ง
 
-ตัวตรวจประกาศเตือนอยู่ที่ `GET /api/cron/weather-alerts` และต้องแนบ `Authorization: Bearer <CRON_SECRET>` ใช้ `supabase/line-weather-cron.example.sql` ตั้ง Supabase Cron ทุก 15 นาที โดยเก็บ URL และ secret ใน Vault ก่อน; endpoint ส่งเฉพาะประกาศ TMD ที่มีผลครอบคลุมกรุงเทพฯ/ปริมณฑล สมุทรปราการ หรือภาคตะวันออก และจดบันทึกการส่งเพื่อป้องกันข้อความซ้ำ
-
-## LINE OA แจ้งเตือนสภาพอากาศ
-
-ระบบรับ webhook ที่ `https://<โดเมนที่ deploy แล้ว>/api/line/webhook` เช่น `https://your-app.vercel.app/api/line/webhook` ให้ใส่ URL นี้ใน **LINE Developers Console → Messaging API → Webhook URL** แล้วเปิด Use webhook และกด Verify หลัง deploy เว็บด้วย HTTPS แล้ว
-
-1. เปิดใช้ LINE Messaging API ของ OA แล้วตั้งค่า channel access token และ channel secret ใน server environment ของ Vercel ตาม `.env.example` ห้ามใส่ค่าเหล่านี้ใน `NEXT_PUBLIC_*`
-2. รัน schema ใน `supabase/schema.sql` เพื่อสร้าง subscription และตารางป้องกันการส่งเตือนซ้ำ พร้อมตั้ง `SUPABASE_SERVICE_ROLE_KEY` ใน server environment เท่านั้น
-3. ผู้ใช้เพิ่มเพื่อน OA พิมพ์ `สมัคร` → `ยินยอม` → แชร์ตำแหน่งผ่านปุ่ม `+` → `ตำแหน่ง` ระบบรับเฉพาะจุดในสมุทรปราการและปัดพิกัดเหลือประมาณ 1 กม.; `หยุด` ยกเลิกการแจ้งเตือนและลบพิกัด
-4. งานตรวจประกาศอยู่ที่ `GET /api/cron/weather-alerts` และป้องกันด้วย `Authorization: Bearer <CRON_SECRET>` ตัวอย่างตั้ง Supabase Cron ทุก 15 นาทีอยู่ใน `supabase/line-weather-cron.example.sql` (เปิด `pg_cron`/`pg_net` และเก็บ URL/secret ใน Vault ก่อนใช้)
-
-ระยะแรกส่งเฉพาะประกาศเตือนอย่างเป็นทางการจาก TMD ที่ครอบคลุมกรุงเทพฯ/ปริมณฑล สมุทรปราการ หรือภาคตะวันออก ไม่ส่งทุกการเปลี่ยนแปลงของพยากรณ์; ตำแหน่งช่วยจำกัดผู้รับให้อยู่ในสมุทรปราการ ส่วนประกาศ TMD เองมีขอบเขตระดับภูมิภาค หากต้องการเตือนฝน/Heat Index รายจุดโดยตรง ให้ลงทะเบียน TMD API และยืนยันเกณฑ์แจ้งเตือนก่อนเปิดใช้งาน
+- `GET /api/cron/weather-alerts` ตรวจประกาศ TMD ที่ครอบคลุมสมุทรปราการ และหากตั้ง `TMD_NWP_ACCESS_TOKEN` จะใช้พยากรณ์รายชั่วโมงจากตำแหน่งย่อยด้วย: รหัสสภาพอากาศ 7/8 (ฝนหนัก/ฝนฟ้าคะนอง), 9/10 (หนาวจัด/หนาว), 12 (ร้อนจัด) โดยเตือนเมื่อคาดว่าจะเกิดใน 3 ชั่วโมงข้างหน้า และจำกัดการส่งซ้ำตามพื้นที่/ประเภท/วัน
+- ตั้ง Supabase Cron ทุก 15 นาทีตาม `supabase/line-weather-cron.example.sql`; ต้องเปิด `pg_cron`/`pg_net` และเก็บ URL/`CRON_SECRET` ใน Vault ก่อนใช้
 
 ## Deploy บน Vercel
 
