@@ -21,6 +21,18 @@ interface LineWebhookBody {
   events?: LineEvent[];
 }
 
+type QuickReplyItem =
+  | { type: "message"; label: string; text: string }
+  | { type: "location"; label: string };
+
+function messageAction(label: string, text: string): QuickReplyItem {
+  return { type: "message", label, text };
+}
+
+function locationAction(label = "แชร์ตำแหน่ง"): QuickReplyItem {
+  return { type: "location", label };
+}
+
 function validSignature(body: string, signature: string, channelSecret: string) {
   const expected = createHmac("sha256", channelSecret).update(body).digest();
   let received: Buffer;
@@ -32,7 +44,7 @@ function validSignature(body: string, signature: string, channelSecret: string) 
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
-async function reply(replyToken: string | undefined, text: string) {
+async function reply(replyToken: string | undefined, text: string, quickReplies: QuickReplyItem[] = []) {
   const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!replyToken || !channelAccessToken) return;
 
@@ -44,7 +56,11 @@ async function reply(replyToken: string | undefined, text: string) {
     },
     body: JSON.stringify({
       replyToken,
-      messages: [{ type: "text", text: text.slice(0, 4900) }],
+      messages: [{
+        type: "text",
+        text: text.slice(0, 4900),
+        ...(quickReplies.length ? { quickReply: { items: quickReplies.map((action) => ({ type: "action", action })) } } : {}),
+      }],
     }),
     signal: AbortSignal.timeout(10_000),
   });
@@ -70,7 +86,23 @@ function isInsideSamutPrakan(latitude: number, longitude: number) {
 }
 
 async function replyGettingStarted(replyToken?: string) {
-  await reply(replyToken, "🌦️ รับแจ้งเตือนสภาพอากาศเสี่ยงในสมุทรปราการ\n\n1) พิมพ์ “สมัคร” เพื่อเริ่มตั้งค่า\n2) อ่านและยอมรับการใช้ตำแหน่งโดยพิมพ์ “ยินยอม”\n3) แชร์ตำแหน่งผ่านปุ่ม + แล้วเลือก “ตำแหน่ง”\n\nระบบจะเก็บพิกัดแบบปัดเศษประมาณ 1 กม. เพื่อเลือกคำเตือนใกล้พื้นที่คุณ พิมพ์ “หยุด” เพื่อยกเลิกและลบตำแหน่งที่บันทึกไว้");
+  await reply(
+    replyToken,
+    "🌦️ รับแจ้งเตือนสภาพอากาศเสี่ยงในสมุทรปราการ\n\nกด “เริ่มสมัคร” เพื่ออ่านรายละเอียดและเลือกยินยอมก่อนแชร์ตำแหน่ง ระบบจะเก็บพิกัดแบบปัดเศษประมาณ 1 กม. เพื่อเลือกคำเตือนใกล้พื้นที่ และไม่ติดตามตำแหน่งเบื้องหลัง",
+    [messageAction("เริ่มสมัคร", "สมัคร")],
+  );
+}
+
+async function replyConsentPrompt(replyToken?: string) {
+  await reply(
+    replyToken,
+    "ก่อนสมัคร ระบบจะใช้ตำแหน่งที่คุณเลือกเพื่อคัดเลือกประกาศเตือนสภาพอากาศในสมุทรปราการ และเก็บเฉพาะพิกัดที่ปัดเศษประมาณ 1 กม. รับตำแหน่งครั้งเดียว ไม่ติดตามเบื้องหลัง\n\nคุณยินยอมให้ใช้และจัดเก็บตำแหน่งตามนี้หรือไม่?",
+    [messageAction("ยินยอม", "ยินยอม"), messageAction("ไม่ยินยอม", "ไม่ยินยอม")],
+  );
+}
+
+async function replyLocationPrompt(replyToken: string | undefined, text = "ขอบคุณครับ แชร์ตำแหน่งที่ต้องการติดตามได้โดยกดปุ่มด้านล่าง แล้วเลือกจุดบนแผนที่") {
+  await reply(replyToken, text, [locationAction(), messageAction("ยกเลิก", "หยุด")]);
 }
 
 async function handleEvent(event: LineEvent) {
@@ -138,7 +170,7 @@ async function handleEvent(event: LineEvent) {
         updated_at: new Date().toISOString(),
       }, { onConflict: "line_user_id" });
       if (error) throw error;
-      await reply(event.replyToken, "ก่อนเริ่ม ระบบจะใช้ตำแหน่งที่คุณแชร์เพื่อคัดเลือกประกาศเตือนสภาพอากาศในสมุทรปราการ และเก็บเฉพาะพิกัดที่ปัดเศษประมาณ 1 กม. พิมพ์ “ยินยอม” เพื่อดำเนินการต่อ หรือ “หยุด” เพื่อยกเลิก");
+      await replyConsentPrompt(event.replyToken);
       return;
     }
 
@@ -160,7 +192,22 @@ async function handleEvent(event: LineEvent) {
         updated_at: new Date().toISOString(),
       }).eq("line_user_id", lineUserId);
       if (error) throw error;
-      await reply(event.replyToken, "ขอบคุณครับ ตอนนี้แชร์ตำแหน่งปัจจุบันในแชตนี้ได้เลย โดยแตะปุ่ม + แล้วเลือก “ตำแหน่ง” ระบบจะรับพิกัดครั้งเดียว ไม่ติดตามตำแหน่งเบื้องหลัง");
+      await replyLocationPrompt(event.replyToken, "ขอบคุณครับ เลือก “แชร์ตำแหน่ง” ด้านล่างเพื่อเปิดแผนที่และส่งตำแหน่งที่ต้องการติดตาม ระบบจะรับพิกัดครั้งเดียว ไม่ติดตามตำแหน่งเบื้องหลัง");
+      return;
+    }
+
+    if (["ไม่ยินยอม", "ไม่ยอมรับ", "decline"].includes(command)) {
+      const { error } = await supabase.from("line_weather_subscriptions").upsert({
+        line_user_id: lineUserId,
+        status: "awaiting_consent",
+        latitude: null,
+        longitude: null,
+        consented_at: null,
+        unsubscribed_at: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "line_user_id" });
+      if (error) throw error;
+      await reply(event.replyToken, "รับทราบครับ ยังไม่ได้สมัครและไม่มีการบันทึกตำแหน่ง หากต้องการเริ่มใหม่ กดปุ่มด้านล่างได้เลย", [messageAction("เริ่มสมัคร", "สมัคร")]);
       return;
     }
 
@@ -177,11 +224,11 @@ async function handleEvent(event: LineEvent) {
       if (error) throw error;
       const { error: deliveryError } = await supabase.from("line_weather_alert_deliveries").delete().eq("line_user_id", lineUserId);
       if (deliveryError) throw deliveryError;
-      await reply(event.replyToken, "ยกเลิกการแจ้งเตือนและลบตำแหน่งที่บันทึกไว้แล้ว หากต้องการสมัครใหม่ พิมพ์ “สมัคร”");
+      await reply(event.replyToken, "ยกเลิกการแจ้งเตือนและลบตำแหน่งที่บันทึกไว้แล้ว หากต้องการสมัครใหม่ กดปุ่มด้านล่างได้เลย", [messageAction("เริ่มสมัครใหม่", "สมัคร")]);
       return;
     }
 
-    if (["ตำแหน่ง", "เปลี่ยนพื้นที่", "location"].includes(command)) {
+    if (["ตำแหน่ง", "เปลี่ยนพื้นที่", "เปลี่ยนตำแหน่ง", "location"].includes(command)) {
       const { data: subscription, error: readError } = await supabase
         .from("line_weather_subscriptions")
         .select("status, consented_at")
@@ -189,7 +236,7 @@ async function handleEvent(event: LineEvent) {
         .maybeSingle();
       if (readError) throw readError;
       if (!subscription?.consented_at) {
-        await reply(event.replyToken, "พิมพ์ “สมัคร” แล้ว “ยินยอม” ก่อนแชร์ตำแหน่งนะครับ");
+        await replyGettingStarted(event.replyToken);
         return;
       }
       const { error } = await supabase.from("line_weather_subscriptions").update({
@@ -197,7 +244,7 @@ async function handleEvent(event: LineEvent) {
         updated_at: new Date().toISOString(),
       }).eq("line_user_id", lineUserId);
       if (error) throw error;
-      await reply(event.replyToken, "แตะปุ่ม + แล้วเลือก “ตำแหน่ง” เพื่อแชร์พื้นที่ที่ต้องการติดตามได้เลยครับ");
+      await replyLocationPrompt(event.replyToken, "เลือก “แชร์ตำแหน่ง” ด้านล่างเพื่อเปลี่ยนพื้นที่ที่ต้องการติดตามครับ");
       return;
     }
 
@@ -213,7 +260,9 @@ async function handleEvent(event: LineEvent) {
         : subscription?.status === "unsubscribed"
           ? "ยังไม่ได้สมัครรับแจ้งเตือน พิมพ์ “สมัคร” เพื่อเริ่มต้น"
           : "ยังตั้งค่าไม่เสร็จ พิมพ์ “สมัคร” เพื่อเริ่มต้น";
-      await reply(event.replyToken, statusMessage);
+      await reply(event.replyToken, statusMessage, subscription?.status === "active"
+        ? [messageAction("เปลี่ยนตำแหน่ง", "ตำแหน่ง"), messageAction("หยุดรับแจ้งเตือน", "หยุด")]
+        : [messageAction("เริ่มสมัคร", "สมัคร")]);
       return;
     }
 
@@ -228,15 +277,15 @@ async function handleEvent(event: LineEvent) {
       .eq("line_user_id", lineUserId)
       .maybeSingle();
     if (readError) throw readError;
-    if (!subscription?.consented_at || !["awaiting_location", "active"].includes(subscription.status)) {
-      await reply(event.replyToken, "ก่อนแชร์ตำแหน่ง โปรดพิมพ์ “สมัคร” และ “ยินยอม” เพื่อเปิดรับแจ้งเตือนก่อนครับ");
+      if (!subscription?.consented_at || !["awaiting_location", "active"].includes(subscription.status)) {
+      await replyGettingStarted(event.replyToken);
       return;
     }
 
     const latitude = Number(event.message.latitude);
     const longitude = Number(event.message.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !isInsideSamutPrakan(latitude, longitude)) {
-      await reply(event.replyToken, "บริการนี้ครอบคลุมจังหวัดสมุทรปราการ กรุณาแชร์ตำแหน่งภายในจังหวัด หรือเลือกตำแหน่งใหม่ด้วยปุ่ม + ครับ");
+      await replyLocationPrompt(event.replyToken, "บริการนี้ครอบคลุมจังหวัดสมุทรปราการ กรุณาเลือกตำแหน่งภายในจังหวัดเพื่อรับแจ้งเตือนครับ");
       return;
     }
 
@@ -251,7 +300,10 @@ async function handleEvent(event: LineEvent) {
       updated_at: new Date().toISOString(),
     }, { onConflict: "line_user_id" });
     if (error) throw error;
-    await reply(event.replyToken, "✅ สมัครรับประกาศเตือนสภาพอากาศสำคัญในสมุทรปราการแล้ว\nบันทึกตำแหน่งแบบปัดเศษประมาณ 1 กม. และไม่ติดตามตำแหน่งต่อเนื่อง\nพิมพ์ “ตำแหน่ง” เพื่อเปลี่ยนพื้นที่ หรือ “หยุด” เพื่อยกเลิกและลบข้อมูล");
+    await reply(event.replyToken, "✅ สมัครรับประกาศเตือนสภาพอากาศสำคัญในสมุทรปราการแล้ว\nบันทึกตำแหน่งแบบปัดเศษประมาณ 1 กม. และไม่ติดตามตำแหน่งต่อเนื่อง", [
+      messageAction("เปลี่ยนตำแหน่ง", "ตำแหน่ง"),
+      messageAction("หยุดรับแจ้งเตือน", "หยุด"),
+    ]);
   }
 }
 
