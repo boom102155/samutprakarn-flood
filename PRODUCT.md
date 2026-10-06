@@ -27,10 +27,11 @@ People may use the site on a phone while checking a flooded area or while planni
 - Reports include water depth category, trend, passable vehicle types, optional notes, and optional photos.
 - Reports can be confirmed as still flooded or receded; users can flag inaccurate or stale information.
 - Public report data should synchronize across visitors in real time using a hosted backend.
-- The site includes current reports, a report map with optional ThaiWater level stations and a selectable hourly rainfall forecast layer, district boundaries, district/subdistrict filtering, public CCTV discovery, and emergency contacts.
+- The site includes current reports, a report map with optional ThaiWater level stations and a selectable hourly rainfall forecast layer, district boundaries, district/subdistrict filtering, public CCTV discovery, emergency contacts, and opt-in LINE OA weather warnings for subscribed Samut Prakan locations.
 - Production Supabase credentials were not provided and must be configured before cross-user live reports are available.
 - Hourly rainfall forecasts are served by Open-Meteo with attribution and a 30-minute cache; precipitation is forecast weather data, not a flood-depth or road-passability measurement. The free API tier is for non-commercial use.
 - ThaiWater provides river and canal station readings, locations, update times, and available bank/warning thresholds for Samut Prakan. Readings older than 24 hours are marked stale; levels are reported in meters above mean sea level.
+- The initial LINE OA alert service sends active official TMD weather warnings whose stated affected area includes Samut Prakan, Bangkok and perimeter, or the East. Subscribers explicitly consent and share a location; the system stores rounded coordinates, does not track in the background, and supports opt-out. More localized forecast-derived heat/rain thresholds require verification before activation.
 - The currently verified public CCTV feeds near Samut Prakan are two iTIC Motion HLS cameras on Bang Na–Trat (BMAI0208 and BMAI0209), listed through Longdo Traffic. The former Highway Department km 6 feeds return HTTP 502. BMAI0202 currently resolves in iTIC's public directory to Pattaya–Naklua, Chonburi, and its HLS feed is unavailable; unverified or mislocated CCTV feeds are excluded from the Samut Prakan list.
 - Initial illustrative flood reports must be identified as sample/demo content until replaced with live reports.
 

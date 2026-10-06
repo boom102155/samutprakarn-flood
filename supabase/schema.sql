@@ -58,3 +58,45 @@ begin
   end if;
 end
 $$;
+
+-- LINE weather notification subscriptions. Keep this table server-side only;
+-- the service-role key is required by the webhook and must never be public.
+create table if not exists public.line_weather_subscriptions (
+  line_user_id text primary key,
+  status text not null default 'awaiting_consent'
+    check (status in ('awaiting_consent', 'awaiting_location', 'active', 'unsubscribed', 'unfollowed')),
+  latitude double precision check (latitude between 5 and 21),
+  longitude double precision check (longitude between 97 and 106),
+  alert_types text[] not null default array['all']::text[],
+  consented_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unsubscribed_at timestamptz,
+  check ((latitude is null) = (longitude is null))
+);
+
+create index if not exists line_weather_subscriptions_active_idx
+  on public.line_weather_subscriptions (status) where status = 'active';
+
+alter table public.line_weather_subscriptions enable row level security;
+
+-- A sent/failed row is keyed by alert and recipient to prevent repeated pushes.
+create table if not exists public.line_weather_alert_deliveries (
+  alert_key text not null,
+  line_user_id text not null references public.line_weather_subscriptions(line_user_id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'sending', 'sent', 'failed')),
+  retry_key uuid not null,
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  last_error text,
+  sent_at timestamptz,
+  updated_at timestamptz not null default now(),
+  primary key (alert_key, line_user_id)
+);
+
+alter table public.line_weather_alert_deliveries
+  add column if not exists retry_key uuid not null default gen_random_uuid();
+
+create index if not exists line_weather_alert_deliveries_status_idx
+  on public.line_weather_alert_deliveries (status, updated_at);
+
+alter table public.line_weather_alert_deliveries enable row level security;

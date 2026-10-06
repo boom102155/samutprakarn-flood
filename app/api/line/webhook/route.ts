@@ -1,0 +1,290 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import samutPrakanBoundary from "@/lib/samut-prakan-boundary.json";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+interface LineEvent {
+  type?: string;
+  replyToken?: string;
+  source?: { type?: string; userId?: string };
+  message?: {
+    type?: string;
+    text?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+}
+
+interface LineWebhookBody {
+  events?: LineEvent[];
+}
+
+function validSignature(body: string, signature: string, channelSecret: string) {
+  const expected = createHmac("sha256", channelSecret).update(body).digest();
+  let received: Buffer;
+  try {
+    received = Buffer.from(signature, "base64");
+  } catch {
+    return false;
+  }
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
+async function reply(replyToken: string | undefined, text: string) {
+  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!replyToken || !channelAccessToken) return;
+
+  const response = await fetch("https://api.line.me/v2/bot/message/reply", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${channelAccessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: "text", text: text.slice(0, 4900) }],
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    console.error("LINE reply failed", response.status);
+  }
+}
+
+function isInsideSamutPrakan(latitude: number, longitude: number) {
+  const ring = samutPrakanBoundary.geometry.coordinates[0] as [number, number][];
+  let inside = false;
+
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
+    const [currentLongitude, currentLatitude] = ring[index];
+    const [previousLongitude, previousLatitude] = ring[previous];
+    const crosses = (currentLatitude > latitude) !== (previousLatitude > latitude)
+      && longitude < ((previousLongitude - currentLongitude) * (latitude - currentLatitude)) / (previousLatitude - currentLatitude) + currentLongitude;
+    if (crosses) inside = !inside;
+  }
+
+  return inside;
+}
+
+async function replyGettingStarted(replyToken?: string) {
+  await reply(replyToken, "🌦️ รับแจ้งเตือนสภาพอากาศเสี่ยงในสมุทรปราการ\n\n1) พิมพ์ “สมัคร” เพื่อเริ่มตั้งค่า\n2) อ่านและยอมรับการใช้ตำแหน่งโดยพิมพ์ “ยินยอม”\n3) แชร์ตำแหน่งผ่านปุ่ม + แล้วเลือก “ตำแหน่ง”\n\nระบบจะเก็บพิกัดแบบปัดเศษประมาณ 1 กม. เพื่อเลือกคำเตือนใกล้พื้นที่คุณ พิมพ์ “หยุด” เพื่อยกเลิกและลบตำแหน่งที่บันทึกไว้");
+}
+
+async function handleEvent(event: LineEvent) {
+  const lineUserId = event.source?.type === "user" ? event.source.userId : undefined;
+  if (!lineUserId) return;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("Supabase service-role configuration is missing");
+
+  if (event.type === "follow") {
+    const { data: existing, error: readError } = await supabase
+      .from("line_weather_subscriptions")
+      .select("status")
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+    if (readError) throw readError;
+
+    if (!existing) {
+      const { error } = await supabase.from("line_weather_subscriptions").insert({ line_user_id: lineUserId });
+      if (error) throw error;
+    } else if (existing.status === "unfollowed") {
+      const { error } = await supabase.from("line_weather_subscriptions").update({
+        status: "awaiting_consent",
+        latitude: null,
+        longitude: null,
+        consented_at: null,
+        unsubscribed_at: null,
+        updated_at: new Date().toISOString(),
+      }).eq("line_user_id", lineUserId);
+      if (error) throw error;
+    }
+
+    await replyGettingStarted(event.replyToken);
+    return;
+  }
+
+  if (event.type === "unfollow") {
+    const { error } = await supabase.from("line_weather_subscriptions").upsert({
+      line_user_id: lineUserId,
+      status: "unfollowed",
+      latitude: null,
+      longitude: null,
+      consented_at: null,
+      unsubscribed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "line_user_id" });
+    if (error) throw error;
+    const { error: deliveryError } = await supabase.from("line_weather_alert_deliveries").delete().eq("line_user_id", lineUserId);
+    if (deliveryError) throw deliveryError;
+    return;
+  }
+
+  if (event.type !== "message" || !event.message) return;
+
+  if (event.message.type === "text") {
+    const command = event.message.text?.trim().toLocaleLowerCase("th-TH") ?? "";
+    if (["สมัคร", "เริ่ม", "start", "subscribe"].includes(command)) {
+      const { error } = await supabase.from("line_weather_subscriptions").upsert({
+        line_user_id: lineUserId,
+        status: "awaiting_consent",
+        latitude: null,
+        longitude: null,
+        consented_at: null,
+        unsubscribed_at: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "line_user_id" });
+      if (error) throw error;
+      await reply(event.replyToken, "ก่อนเริ่ม ระบบจะใช้ตำแหน่งที่คุณแชร์เพื่อคัดเลือกประกาศเตือนสภาพอากาศในสมุทรปราการ และเก็บเฉพาะพิกัดที่ปัดเศษประมาณ 1 กม. พิมพ์ “ยินยอม” เพื่อดำเนินการต่อ หรือ “หยุด” เพื่อยกเลิก");
+      return;
+    }
+
+    if (["ยินยอม", "ยอมรับ", "consent"].includes(command)) {
+      const { data: subscription, error: readError } = await supabase
+        .from("line_weather_subscriptions")
+        .select("status")
+        .eq("line_user_id", lineUserId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!subscription || !["awaiting_consent", "awaiting_location"].includes(subscription.status)) {
+        await replyGettingStarted(event.replyToken);
+        return;
+      }
+
+      const { error } = await supabase.from("line_weather_subscriptions").update({
+        status: "awaiting_location",
+        consented_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("line_user_id", lineUserId);
+      if (error) throw error;
+      await reply(event.replyToken, "ขอบคุณครับ ตอนนี้แชร์ตำแหน่งปัจจุบันในแชตนี้ได้เลย โดยแตะปุ่ม + แล้วเลือก “ตำแหน่ง” ระบบจะรับพิกัดครั้งเดียว ไม่ติดตามตำแหน่งเบื้องหลัง");
+      return;
+    }
+
+    if (["หยุด", "ยกเลิก", "ปิดแจ้งเตือน", "stop", "unsubscribe"].includes(command)) {
+      const { error } = await supabase.from("line_weather_subscriptions").upsert({
+        line_user_id: lineUserId,
+        status: "unsubscribed",
+        latitude: null,
+        longitude: null,
+        consented_at: null,
+        unsubscribed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "line_user_id" });
+      if (error) throw error;
+      const { error: deliveryError } = await supabase.from("line_weather_alert_deliveries").delete().eq("line_user_id", lineUserId);
+      if (deliveryError) throw deliveryError;
+      await reply(event.replyToken, "ยกเลิกการแจ้งเตือนและลบตำแหน่งที่บันทึกไว้แล้ว หากต้องการสมัครใหม่ พิมพ์ “สมัคร”");
+      return;
+    }
+
+    if (["ตำแหน่ง", "เปลี่ยนพื้นที่", "location"].includes(command)) {
+      const { data: subscription, error: readError } = await supabase
+        .from("line_weather_subscriptions")
+        .select("status, consented_at")
+        .eq("line_user_id", lineUserId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!subscription?.consented_at) {
+        await reply(event.replyToken, "พิมพ์ “สมัคร” แล้ว “ยินยอม” ก่อนแชร์ตำแหน่งนะครับ");
+        return;
+      }
+      const { error } = await supabase.from("line_weather_subscriptions").update({
+        status: "awaiting_location",
+        updated_at: new Date().toISOString(),
+      }).eq("line_user_id", lineUserId);
+      if (error) throw error;
+      await reply(event.replyToken, "แตะปุ่ม + แล้วเลือก “ตำแหน่ง” เพื่อแชร์พื้นที่ที่ต้องการติดตามได้เลยครับ");
+      return;
+    }
+
+    if (["สถานะ", "status"].includes(command)) {
+      const { data: subscription, error } = await supabase
+        .from("line_weather_subscriptions")
+        .select("status, latitude, longitude")
+        .eq("line_user_id", lineUserId)
+        .maybeSingle();
+      if (error) throw error;
+      const statusMessage = subscription?.status === "active"
+        ? `กำลังรับประกาศเตือนในสมุทรปราการ พื้นที่ประมาณ ${Number(subscription.latitude).toFixed(2)}, ${Number(subscription.longitude).toFixed(2)}\nพิมพ์ “ตำแหน่ง” เพื่อเปลี่ยนพื้นที่ หรือ “หยุด” เพื่อยกเลิก`
+        : subscription?.status === "unsubscribed"
+          ? "ยังไม่ได้สมัครรับแจ้งเตือน พิมพ์ “สมัคร” เพื่อเริ่มต้น"
+          : "ยังตั้งค่าไม่เสร็จ พิมพ์ “สมัคร” เพื่อเริ่มต้น";
+      await reply(event.replyToken, statusMessage);
+      return;
+    }
+
+    await replyGettingStarted(event.replyToken);
+    return;
+  }
+
+  if (event.message.type === "location") {
+    const { data: subscription, error: readError } = await supabase
+      .from("line_weather_subscriptions")
+      .select("status, consented_at")
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+    if (readError) throw readError;
+    if (!subscription?.consented_at || !["awaiting_location", "active"].includes(subscription.status)) {
+      await reply(event.replyToken, "ก่อนแชร์ตำแหน่ง โปรดพิมพ์ “สมัคร” และ “ยินยอม” เพื่อเปิดรับแจ้งเตือนก่อนครับ");
+      return;
+    }
+
+    const latitude = Number(event.message.latitude);
+    const longitude = Number(event.message.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !isInsideSamutPrakan(latitude, longitude)) {
+      await reply(event.replyToken, "บริการนี้ครอบคลุมจังหวัดสมุทรปราการ กรุณาแชร์ตำแหน่งภายในจังหวัด หรือเลือกตำแหน่งใหม่ด้วยปุ่ม + ครับ");
+      return;
+    }
+
+    const { error } = await supabase.from("line_weather_subscriptions").upsert({
+      line_user_id: lineUserId,
+      status: "active",
+      latitude: Math.round(latitude * 100) / 100,
+      longitude: Math.round(longitude * 100) / 100,
+      alert_types: ["all"],
+      consented_at: subscription.consented_at,
+      unsubscribed_at: null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "line_user_id" });
+    if (error) throw error;
+    await reply(event.replyToken, "✅ สมัครรับประกาศเตือนสภาพอากาศสำคัญในสมุทรปราการแล้ว\nบันทึกตำแหน่งแบบปัดเศษประมาณ 1 กม. และไม่ติดตามตำแหน่งต่อเนื่อง\nพิมพ์ “ตำแหน่ง” เพื่อเปลี่ยนพื้นที่ หรือ “หยุด” เพื่อยกเลิกและลบข้อมูล");
+  }
+}
+
+export async function POST(request: Request) {
+  const channelSecret = process.env.LINE_CHANNEL_SECRET;
+  if (!channelSecret) return Response.json({ error: "LINE_CHANNEL_SECRET is not configured" }, { status: 503 });
+
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-line-signature") ?? "";
+  if (!validSignature(rawBody, signature, channelSecret)) {
+    return Response.json({ error: "Invalid LINE webhook signature" }, { status: 401 });
+  }
+
+  let body: LineWebhookBody;
+  try {
+    body = JSON.parse(rawBody) as LineWebhookBody;
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (!body.events?.length) return Response.json({ ok: true });
+  if (!process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+    return Response.json({ error: "LINE_CHANNEL_ACCESS_TOKEN is not configured" }, { status: 503 });
+  }
+  if (!getSupabaseAdmin()) {
+    return Response.json({ error: "Supabase server credentials are not configured" }, { status: 503 });
+  }
+
+  try {
+    for (const event of body.events) await handleEvent(event);
+    return Response.json({ ok: true });
+  } catch (error) {
+    console.error("LINE weather webhook processing failed", error instanceof Error ? error.message : "unknown error");
+    return Response.json({ error: "Unable to process LINE webhook event" }, { status: 500 });
+  }
+}
