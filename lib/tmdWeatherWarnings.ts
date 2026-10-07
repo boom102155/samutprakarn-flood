@@ -103,10 +103,20 @@ export function parseTmdWarnings(xml: string, now = Date.now()): TmdWeatherWarni
 }
 
 export function formatWeatherAlert(warning: TmdWeatherWarning) {
+  const normalizedHeadline = warning.headline.replace(/\s+/g, "").normalize("NFC");
+  const normalizedDescription = warning.description.replace(/\s+/g, "").normalize("NFC");
+  const descriptionIncludesHeadline = normalizedHeadline.length >= 80 && normalizedDescription.startsWith(normalizedHeadline);
+  const summary = descriptionIncludesHeadline
+    ? warning.description
+    : [warning.headline, warning.description].filter(Boolean).join("\n\n");
+  const readableSummary = summary
+    .replace(/\s*-\s*ในวันที่\s*/g, "\n• วันที่ ")
+    .replace(/\s+ทั้งนี้เนื่องจาก/g, "\n\nสาเหตุ: ")
+    .replace(/\s+ขอให้ประชาชน/g, "\n\nคำแนะนำ: ")
+    .replace(/\s+อนึ่ง/g, "\n\nอนึ่ง ");
   const paragraphs = [
     `⚠️ ${warning.title}`,
-    warning.headline,
-    warning.description,
+    readableSummary,
     warning.startsAt || warning.endsAt
       ? `ช่วงเวลาที่มีผล: ${warning.startsAt ? new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(warning.startsAt)) : "เริ่มแล้ว"}${warning.endsAt ? ` ถึง ${new Intl.DateTimeFormat("th-TH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(warning.endsAt))}` : ""}`
       : "",
