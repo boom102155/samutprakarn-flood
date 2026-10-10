@@ -290,6 +290,8 @@ button:disabled { cursor: wait; opacity: .7; }
 .map-legend-block { display: grid; gap: 12px; margin: -1px 0 13px; }
 .map-data-layer-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
 .map-legend-block .water-legend { gap: 10px 20px; }
+.map-freshness-note { display: flex; align-items: center; gap: 7px; margin: -4px 0 0; color: #536d84; font-size: 11px; line-height: 1.5; }
+.map-freshness-note svg { flex: 0 0 auto; color: #597994; }
 .map-legend-block > p { display: flex; align-items: center; gap: 7px; margin: 0; color: #5e7389; font-size: 10px; line-height: 1.6; }
 .map-legend-block > p svg { flex: 0 0 auto; color: #577a9f; }
 .full-map-wrap { overflow: hidden; border: 1px solid #cfdae4; border-radius: 12px; background: #eaf0f2; box-shadow: 0 8px 22px rgba(23,50,79,.07); scroll-margin-top: 16px; }
@@ -300,7 +302,7 @@ button:disabled { cursor: wait; opacity: .7; }
 .map-bottom-note a { color: #56718b; }
 .map-empty-message { position: absolute; z-index: 400; top: 50%; left: 50%; display: flex; align-items: center; gap: 8px; padding: 11px 14px; color: #435f78; border: 1px solid #d8e3eb; border-radius: 9px; background: rgba(255,255,255,.96); box-shadow: var(--shadow-soft); font-size: 11px; transform: translate(-50%, -50%); pointer-events: none; }
 .report-dot-shell { border: 0 !important; background: transparent !important; }
-.report-dot { position: relative; display: grid; width: 38px; height: 38px; place-items: center; margin: 2px; border: 2px solid rgba(255,255,255,.96); border-radius: 50%; background: var(--marker-color); box-shadow: 0 2px 7px rgba(18,35,51,.34), inset 0 0 0 1px rgba(18,35,51,.16); isolation: isolate; }
+.report-dot { position: relative; display: grid; width: 38px; height: 38px; place-items: center; margin: 2px; border: 2px solid rgba(255,255,255,.96); border-radius: 50%; background: var(--marker-color); box-shadow: 0 2px 7px rgba(18,35,51,.34), inset 0 0 0 1px rgba(18,35,51,.16); isolation: isolate; opacity: var(--marker-opacity, 1); }
 .report-dot::after { position: absolute; z-index: 0; inset: -1px; border: 2px solid var(--marker-color); border-radius: inherit; animation: report-radiate 3.6s cubic-bezier(.16,1,.3,1) infinite; animation-delay: var(--marker-pulse-delay, 0ms); content: ""; pointer-events: none; }
 .report-dot-value { position: relative; z-index: 1; color: #fff; font-size: 8px; font-weight: 800; letter-spacing: -.035em; line-height: 1; text-shadow: 0 1px 2px rgba(8,25,44,.5); white-space: nowrap; }
 @keyframes report-radiate { 0% { opacity: .52; transform: scale(.78); } 70%, 100% { opacity: 0; transform: scale(2.15); } }

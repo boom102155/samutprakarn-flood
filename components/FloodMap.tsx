@@ -13,7 +13,7 @@ import { DistrictBoundaryFeature } from "@/lib/districtBoundaries";
 import { ThaiWaterStation, thaiWaterStationColors } from "@/lib/thaiwaterStations";
 import RainForecastOverlay from "@/components/RainForecastOverlay";
 import samutPrakanBoundary from "@/lib/samut-prakan-boundary.json";
-import { MapPosition, reportFreshness } from "@/lib/floodInsights";
+import { MapPosition, reportFreshness, reportMarkerOpacity } from "@/lib/floodInsights";
 
 const center: [number, number] = [13.607, 100.66];
 const provinceRing: [number, number][] = samutPrakanBoundary.geometry.coordinates[0].map(
@@ -72,9 +72,11 @@ function reportMarker(report: FloodReport) {
     : `${depthLabel} ซม. · ${severityLabel(report.waterLevel)}`;
   const escapedTitle = title.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
   const pulseDelay = Array.from(report.id).reduce((sum, character) => sum + character.charCodeAt(0), 0) % 3600;
+  const markerOpacity = reportMarkerOpacity(report.createdAt);
+  const freshness = reportFreshness(report.createdAt);
   return L.divIcon({
     className: "report-dot-shell",
-    html: `<span class="report-dot${report.condition === "receded" ? " is-receded" : ""}" style="--marker-color:${color};--marker-pulse-delay:-${pulseDelay}ms" title="${escapedTitle}" aria-label="${escapedTitle}"><span class="report-dot-value">${escapedLabel}</span></span>`,
+    html: `<span class="report-dot${report.condition === "receded" ? " is-receded" : ""}" style="--marker-color:${color};--marker-opacity:${markerOpacity};--marker-pulse-delay:-${pulseDelay}ms" title="${escapedTitle} · ${freshness.label}" aria-label="${escapedTitle} · ${freshness.label}"><span class="report-dot-value">${escapedLabel}</span></span>`,
     iconSize: [42, 42],
     iconAnchor: [21, 21],
     popupAnchor: [0, -21],

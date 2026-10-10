@@ -14,7 +14,7 @@ import {
   subdistrictsByDistrict, VehicleType, waterLevels, WaterTrend,
 } from "@/lib/types";
 import { DuplicateFloodReportError, timeAgo, useFloodReports } from "@/lib/useFloodReports";
-import { distanceToRouteInMeters, MapPosition, parseMapPosition, reportFreshness, reportsNearPosition } from "@/lib/floodInsights";
+import { distanceToRouteInMeters, MapPosition, parseMapPosition, reportFreshness, reportMarkerOpacity, reportsNearPosition } from "@/lib/floodInsights";
 import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
 import { ThaiWaterStation, ThaiWaterStationCondition, thaiWaterSourceUrl, thaiWaterStationColors, thaiWaterStationLabels } from "@/lib/thaiwaterStations";
 import CameraHlsFeed, { CameraFeedStatus } from "@/components/CameraHlsFeed";
@@ -55,11 +55,6 @@ const cameras: { id: string; name: string; road: string; district: string; subdi
   { id: "itic-bmai-0208", name: "ถ.บางนา–ตราด · iTIC BMAI0208", road: "ถนนบางนา–ตราด", district: districts[1], subdistrict: "บางแก้ว", coordinates: [13.6665541, 100.6409509], feedUrl: "https://camera1.iticfoundation.org/hls/10.8.0.21_8001.m3u8", feedType: "hls", sourceUrl: "https://traffic.longdo.com/cameralist?open=ITICM_BMAMI0208", sourceLabel: "Longdo Traffic · iTIC Motion" },
   { id: "itic-bmai-0209", name: "ถ.บางนา–ตราด · iTIC BMAI0209", road: "ถนนบางนา–ตราด", district: districts[1], subdistrict: "บางแก้ว", coordinates: [13.6688515, 100.6291749], feedUrl: "https://camera1.iticfoundation.org/hls/10.8.0.21_8002.m3u8", feedType: "hls", sourceUrl: "https://traffic.longdo.com/cameralist?open=ITICM_BMAMI0209", sourceLabel: "Longdo Traffic · iTIC Motion" },
 ];
-
-function markerOpacity(createdAt: string) {
-  const hours = (Date.now() - Date.parse(createdAt)) / 3_600_000;
-  return hours >= 24 ? 0.42 : hours >= 12 ? 0.67 : 1;
-}
 
 async function compressImage(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -142,7 +137,7 @@ function ReportRow({ report, onClick, compact = false }: { report: FloodReport; 
   const freshness = reportFreshness(report.createdAt);
   return (
     <button className={`report-row${compact ? " compact-row" : ""}${report.condition === "receded" ? " row-receded" : ""}`} onClick={onClick}>
-      <span className="row-severity-dot" style={{ background: levelColors[report.waterLevel], opacity: markerOpacity(report.createdAt) }} />
+      <span className="row-severity-dot" style={{ background: levelColors[report.waterLevel], opacity: reportMarkerOpacity(report.createdAt) }} />
       <span className="row-main"><span className="row-location">{report.locationName}{report.condition === "receded" && <em className="receded-tag">น้ำลดแล้ว</em>}</span><span className="row-area">{report.subdistrict} · {report.district.replace("อำเภอ", "")}</span>{!compact && <span className="row-detail">{report.trend} · {report.passable.join(", ") || "ไม่ระบุรถที่ผ่านได้"} · กดยืนยัน {report.confirmations} ครั้ง</span>}<span className={`report-freshness ${freshness.tone}`}>{freshness.label}</span></span>
       <span className="row-level"><strong style={{ color: levelColors[report.waterLevel] }}>{severityLabel(report.waterLevel)}</strong><small><Clock3 size={12} />{timeAgo(report.createdAt)}</small></span>
       <ChevronRight size={17} className="row-chevron" />
@@ -262,7 +257,7 @@ function ReportActivity({ reports }: { reports: FloodReport[] }) {
   });
   const maximum = Math.max(1, ...periods.map((period) => period.count));
   const total = periods.reduce((sum, period) => sum + period.count, 0);
-  return <section className="report-activity"><div className="report-activity-heading"><div><h2>รายงานใน 24 ชั่วโมง</h2><p>แบ่งช่วงละ 4 ชั่วโมง · ตัวเลขใต้กราฟคือชั่วโมงที่แล้ว · ไม่ใช่ค่าระดับน้ำ</p></div><strong>{total} <small>จุด</small></strong></div><div className="activity-bars" aria-label="จำนวนรายงานแยกตามช่วง 4 ชั่วโมง">{periods.map((period) => <div className="activity-bar-column" key={period.label}><span>{period.count}</span><i><b style={{ height: `${Math.max(period.count ? 8 : 0, period.count / maximum * 100)}%` }} /></i><small>{period.label}</small></div>)}</div></section>;
+  return <section className="report-activity"><div className="report-activity-heading"><div><h2>รายงานใน 24 ชั่วโมง</h2><p>หมุดแผนที่ยิ่งจางหมายถึงรายงานยิ่งเก่า · แบ่งช่วงละ 4 ชั่วโมง · ตัวเลขใต้กราฟคือชั่วโมงที่แล้ว · ไม่ใช่ค่าระดับน้ำ</p></div><strong>{total} <small>จุด</small></strong></div><div className="activity-bars" aria-label="จำนวนรายงานแยกตามช่วง 4 ชั่วโมง">{periods.map((period) => <div className="activity-bar-column" key={period.label}><span>{period.count}</span><i><b style={{ height: `${Math.max(period.count ? 8 : 0, period.count / maximum * 100)}%` }} /></i><small>{period.label}</small></div>)}</div></section>;
 }
 
 function levelMeasurement(level: (typeof waterLevels)[number]) {
@@ -736,6 +731,7 @@ function MapView({ reports, selectedId, onStillFlooded, onReceded, onFlag, onSel
         </section>
         </div>
         <WaterLegend />
+        <p className="map-freshness-note"><Clock3 size={14} />หมุดยิ่งจางหมายถึงรายงานยิ่งเก่า: 12–24 ชม. จางลง · ตั้งแต่ 24 ชม. จางมาก</p>
         <p><Info size={15} />จุดขอบประ = มีผู้แจ้งว่าน้ำลดแล้ว · แตะจุดเพื่ออัปเดตว่ายังท่วมหรือน้ำลดแล้ว</p>
       </div>
       <div id="flood-map" className="full-map-wrap"><FloodMap reports={visible} selectedId={selectedId} onStillFlooded={onStillFlooded} onReceded={onReceded} onFlag={onFlag} waterStations={stationLayerEnabled ? thaiWaterStations : undefined} rainForecastPoints={rainEnabled && rainForecast ? rainMapPoints : undefined} routeCoordinates={routeCoordinates} routeStartPosition={routeStart?.position} routeStartAccuracyMeters={routeStart?.accuracyMeters} routeStartIsCurrent={routeStart?.isCurrent} showDistrictBoundaries className="full-map" /></div>

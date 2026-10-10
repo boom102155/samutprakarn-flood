@@ -63,6 +63,12 @@ export function reportFreshness(createdAt: string, now = Date.now()) {
   return { label: "ข้อมูลเก่า · โปรดยืนยันหน้างาน", tone: "stale", ageMinutes };
 }
 
+export function reportMarkerOpacity(createdAt: string, now = Date.now()) {
+  const ageHours = Math.max(0, (now - Date.parse(createdAt)) / 3_600_000);
+  if (!Number.isFinite(ageHours)) return 1;
+  return ageHours >= 24 ? 0.42 : ageHours >= 12 ? 0.67 : 1;
+}
+
 export function reportsNearPosition(reports: FloodReport[], position: MapPosition, radiusInMeters: number) {
   return reports
     .map((report) => ({ report, distance: distanceInMeters(position, [report.latitude, report.longitude]) }))
