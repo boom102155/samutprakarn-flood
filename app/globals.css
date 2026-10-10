@@ -535,6 +535,18 @@ button:disabled { cursor: wait; opacity: .7; }
 .photo-preview button { display: grid; width: 28px; height: 28px; place-items: center; color: #758699; border: 0; border-radius: 5px; background: transparent; cursor: pointer; }
 .form-alert { display: flex; align-items: center; gap: 7px; margin: 0 22px 13px; padding: 9px 10px; color: #943e3a; border: 1px solid #edc6c3; border-radius: 7px; background: #fff3f2; font-size: 10px; }
 .form-alert svg { flex: 0 0 auto; }
+.duplicate-report-alert { display: grid; gap: 11px; margin: 0 22px 13px; padding: 12px; color: #684f19; border: 1px solid #ead9a7; border-radius: 8px; background: #fff9e9; }
+.duplicate-report-copy { display: flex; align-items: flex-start; gap: 8px; }
+.duplicate-report-copy > svg { flex: 0 0 auto; margin-top: 2px; color: #ad7c1d; }
+.duplicate-report-copy strong { color: #654c17; font-size: 12px; }
+.duplicate-report-copy p { margin: 3px 0; color: #675d43; font-size: 10px; line-height: 1.5; }
+.duplicate-report-copy small { display: block; color: #74694e; font-size: 9px; line-height: 1.5; }
+.duplicate-report-actions { display: flex; flex-wrap: wrap; gap: 7px; padding-left: 25px; }
+.duplicate-report-actions .button { min-height: 36px; padding: 0 10px; font-size: 10px; }
+.duplicate-confirm-button { color: #236b4e; border-color: #9bcbb0; background: #fff; }
+.duplicate-confirm-button:hover:not(:disabled) { background: #f2faf5; }
+.duplicate-new-button { color: #715a24; border-color: #ddc98c; background: #fffdf6; }
+.duplicate-new-button:hover:not(:disabled) { background: #fff4d5; }
 .submit-report { width: calc(100% - 44px); margin: 0 22px; min-height: 44px; font-size: 12px; }
 .button-spinner { width: 13px; height: 13px; border-color: rgba(255,255,255,.45); border-top-color: #fff; }
 .form-privacy { display: flex; align-items: center; justify-content: center; gap: 5px; margin: 10px 10px 18px; color: #74879a; font-size: 9px; }
@@ -795,6 +807,12 @@ button:disabled { cursor: wait; opacity: .7; }
   .field textarea { font-size: 10px; }
   .submit-report { width: calc(100% - 24px); margin: 0 12px; }
   .form-alert { align-items: flex-start; margin-right: 12px; margin-left: 12px; font-size: 9px; }
+  .duplicate-report-alert { margin-right: 12px; margin-left: 12px; padding: 10px; }
+  .duplicate-report-copy strong { font-size: 12px; }
+  .duplicate-report-copy p { font-size: 10px; }
+  .duplicate-report-copy small { font-size: 10px; }
+  .duplicate-report-actions { padding-left: 0; }
+  .duplicate-report-actions .button { flex: 1; min-height: 40px; font-size: 11px; }
   .form-privacy { color: #61778d; font-size: 10px; }
   .report-side-note { display: none; }
   .cctv-disclaimer { align-items: flex-start; gap: 7px; padding: 9px; font-size: 10px; line-height: 1.65; }

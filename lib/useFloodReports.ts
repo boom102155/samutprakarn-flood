@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { demoReports, FloodReport, NewFloodReport, ReportCondition, districts } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
+import { distanceInMeters } from "@/lib/floodInsights";
 
 const STORAGE_KEY = "samutprakarn-flood-reports-v1";
 
@@ -35,19 +36,11 @@ function fromDatabase(row: Record<string, unknown>): FloodReport {
   };
 }
 
-function toDatabase(report: NewFloodReport & { photoUrl?: string }) {
-  return {
-    location_name: report.locationName,
-    district: report.district,
-    subdistrict: report.subdistrict,
-    latitude: report.latitude,
-    longitude: report.longitude,
-    water_level: report.waterLevel,
-    trend: report.trend,
-    passable: report.passable,
-    note: report.note,
-    photo_url: report.photoUrl ?? null,
-  };
+export class DuplicateFloodReportError extends Error {
+  constructor(readonly candidate: FloodReport, readonly distanceMeters: number) {
+    super("พบรายงานใกล้เคียงในพื้นที่นี้");
+    this.name = "DuplicateFloodReportError";
+  }
 }
 
 function sortReports(items: FloodReport[]) {
@@ -128,21 +121,56 @@ export function useFloodReports() {
     });
   }, []);
 
-  const addReport = useCallback(async (report: NewFloodReport, photo?: File) => {
+  const addReport = useCallback(async (report: NewFloodReport, allowDuplicate = false) => {
     if (supabase) {
-      let photoUrl: string | undefined;
-      if (photo) {
-        const extension = photo.name.split(".").pop()?.toLowerCase() || "jpg";
-        const filePath = `${crypto.randomUUID()}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from("report-photos").upload(filePath, photo, { contentType: photo.type, upsert: false });
-        if (uploadError) throw new Error(`อัปโหลดรูปไม่สำเร็จ: ${uploadError.message}`);
-        photoUrl = supabase.storage.from("report-photos").getPublicUrl(filePath).data.publicUrl;
+      const { photoUrl, ...reportData } = report;
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report: reportData,
+          photoDataUrl: photoUrl?.startsWith("data:image/jpeg;base64,") ? photoUrl : undefined,
+          allowDuplicate,
+        }),
+      });
+      const result = await response.json() as {
+        status?: string;
+        report?: Record<string, unknown>;
+        candidate?: Record<string, unknown>;
+        distanceMeters?: number | null;
+        retryAfterSeconds?: number;
+        error?: string;
+      };
+      if (response.status === 409 && result.status === "duplicate" && result.candidate) {
+        throw new DuplicateFloodReportError(fromDatabase(result.candidate), result.distanceMeters ?? 0);
       }
-      const { data, error } = await supabase.from("reports").insert(toDatabase({ ...report, photoUrl })).select("*").single();
-      if (error) throw new Error(`บันทึกรายงานไม่สำเร็จ: ${error.message}`);
-      const saved = fromDatabase(data as Record<string, unknown>);
+      if (response.status === 429) {
+        const waitMinutes = Math.max(1, Math.ceil((result.retryAfterSeconds ?? 600) / 60));
+        throw new Error(`ส่งรายงานถี่เกินไป โปรดรอประมาณ ${waitMinutes} นาทีแล้วลองใหม่`);
+      }
+      if (!response.ok || !result.report) throw new Error(result.error || "บันทึกรายงานไม่สำเร็จ โปรดลองอีกครั้ง");
+      const saved = fromDatabase(result.report);
       updateLocal((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
       return saved;
+    }
+
+    const now = Date.now();
+    const candidate = reports.find((existing) => {
+      const age = now - Date.parse(existing.createdAt);
+      const sameVehicles = existing.passable.length === report.passable.length
+        && existing.passable.every((vehicle) => report.passable.includes(vehicle));
+      return existing.condition === "flooded"
+        && existing.district === report.district
+        && existing.subdistrict === report.subdistrict
+        && existing.waterLevel === report.waterLevel
+        && existing.trend === report.trend
+        && sameVehicles
+        && age >= 0
+        && age <= 15 * 60_000
+        && distanceInMeters([report.latitude, report.longitude], [existing.latitude, existing.longitude]) <= 100;
+    });
+    if (candidate && !allowDuplicate) {
+      throw new DuplicateFloodReportError(candidate, distanceInMeters([report.latitude, report.longitude], [candidate.latitude, candidate.longitude]));
     }
 
     const saved: FloodReport = {
@@ -155,7 +183,7 @@ export function useFloodReports() {
     };
     updateLocal((current) => [saved, ...current]);
     return saved;
-  }, [updateLocal]);
+  }, [reports, updateLocal]);
 
   const confirmReport = useCallback(async (id: string, condition: ReportCondition) => {
     const report = reports.find((item) => item.id === id);
@@ -177,6 +205,16 @@ export function useFloodReports() {
     updateLocal((current) => current.map((item) => item.id === id ? { ...item, condition: "flooded", confirmations: item.confirmations + 1 } : item));
   }, [reports, updateLocal]);
 
+  const confirmReportDetails = useCallback(async (id: string) => {
+    const report = reports.find((item) => item.id === id);
+    if (!report) return;
+    if (supabase) {
+      const { error } = await supabase.from("reports").update({ confirmations: report.confirmations + 1 }).eq("id", id);
+      if (error) throw new Error(`ยืนยันรายงานไม่สำเร็จ: ${error.message}`);
+    }
+    updateLocal((current) => current.map((item) => item.id === id ? { ...item, confirmations: item.confirmations + 1 } : item));
+  }, [reports, updateLocal]);
+
   const flagReport = useCallback(async (id: string, reason: string) => {
     const report = reports.find((item) => item.id === id);
     if (!report || report.flags.includes(reason)) return;
@@ -188,7 +226,7 @@ export function useFloodReports() {
     updateLocal((current) => current.map((item) => item.id === id ? { ...item, flags } : item));
   }, [reports, updateLocal]);
 
-  return { reports, loading, liveMode, connected, connectionError, addReport, confirmReport, confirmStillFlooded, flagReport };
+  return { reports, loading, liveMode, connected, connectionError, addReport, confirmReport, confirmStillFlooded, confirmReportDetails, flagReport };
 }
 
 export function timeAgo(isoDate: string) {

@@ -13,7 +13,7 @@ import {
   districts, FloodReport, levelColors, NewFloodReport, severityLabel,
   subdistrictsByDistrict, VehicleType, waterLevels, WaterTrend,
 } from "@/lib/types";
-import { timeAgo, useFloodReports } from "@/lib/useFloodReports";
+import { DuplicateFloodReportError, timeAgo, useFloodReports } from "@/lib/useFloodReports";
 import { distanceToRouteInMeters, MapPosition, parseMapPosition, reportFreshness, reportsNearPosition } from "@/lib/floodInsights";
 import { RainForecastData, RainMapPoint, rainForecastOptions } from "@/lib/rainForecast";
 import { ThaiWaterStation, ThaiWaterStationCondition, thaiWaterSourceUrl, thaiWaterStationColors, thaiWaterStationLabels } from "@/lib/thaiwaterStations";
@@ -319,7 +319,13 @@ function HomeView({ reports, onNavigate, onSelectReport, isLive, connected, watc
   );
 }
 
-function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewFloodReport, photo?: File) => Promise<FloodReport>; reports: FloodReport[]; onNavigate: (view: View) => void }) {
+function ReportView({ onSubmit, onConfirmDuplicate, onSelectReport, reports, onNavigate }: {
+  onSubmit: (report: NewFloodReport, allowDuplicate?: boolean) => Promise<FloodReport>;
+  onConfirmDuplicate: (id: string) => Promise<void>;
+  onSelectReport: (id: string) => void;
+  reports: FloodReport[];
+  onNavigate: (view: View) => void;
+}) {
   const [position, setPosition] = useState<Position | null>(null);
   const [coordinateInput, setCoordinateInput] = useState("");
   const [locationName, setLocationName] = useState("");
@@ -336,6 +342,7 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [duplicateCandidate, setDuplicateCandidate] = useState<DuplicateFloodReportError | null>(null);
   const subdistrictOptions = subdistrictsByDistrict[district] ?? [];
 
   const toggleVehicle = (vehicle: VehicleType) => setPassable((current) => current.includes(vehicle) ? current.filter((item) => item !== vehicle) : [...current, vehicle]);
@@ -372,12 +379,12 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
     catch { setError("เปิดรูปไม่สำเร็จ โปรดลองเลือกรูปอื่น"); }
   };
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const saveReport = async (allowDuplicate = false) => {
     setError("");
     if (!position) { setPositionError("โปรดเลือกตำแหน่งบนแผนที่ หรือวางลิงก์/พิกัดก่อนส่งรายงาน"); return; }
     if (!waterLevel || !trend) { setError("โปรดเลือกระดับน้ำและแนวโน้มก่อนส่งรายงาน"); return; }
     if (!subdistrict) { setError("โปรดเลือกตำบลของจุดรายงาน"); return; }
+    setDuplicateCandidate(null);
     setSubmitting(true);
     try {
       const report: NewFloodReport = {
@@ -392,12 +399,30 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
         note: note.trim(),
         photoUrl: photoPreview || undefined,
       };
-      const saved = await onSubmit(report, photo);
+      const saved = await onSubmit(report, allowDuplicate);
       setSuccess(true);
       setTimeout(() => { setSuccess(false); onNavigate("map"); }, 1500);
       setPosition([saved.latitude, saved.longitude]);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "ส่งรายงานไม่สำเร็จ โปรดลองอีกครั้ง");
+      if (submitError instanceof DuplicateFloodReportError) setDuplicateCandidate(submitError);
+      else setError(submitError instanceof Error ? submitError.message : "ส่งรายงานไม่สำเร็จ โปรดลองอีกครั้ง");
+    } finally { setSubmitting(false); }
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void saveReport();
+  };
+
+  const confirmExistingReport = async () => {
+    if (!duplicateCandidate) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await onConfirmDuplicate(duplicateCandidate.candidate.id);
+      onSelectReport(duplicateCandidate.candidate.id);
+    } catch (confirmError) {
+      setError(confirmError instanceof Error ? confirmError.message : "ยืนยันรายงานเดิมไม่สำเร็จ โปรดลองอีกครั้ง");
     } finally { setSubmitting(false); }
   };
 
@@ -443,6 +468,10 @@ function ReportView({ onSubmit, reports, onNavigate }: { onSubmit: (report: NewF
             <div className="field"><label htmlFor="note">หมายเหตุ <span className="optional">(ไม่บังคับ)</span></label><textarea id="note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={400} rows={3} placeholder="เช่น รถเล็กควรใช้เส้นทางเลี่ยง น้ำเริ่มลดแล้ว" /><span className="character-count">{note.length}/400</span></div>
             <div className="field photo-field"><span className="field-label">แนบรูป <span className="optional">(ไม่บังคับ · ไม่เกิน 10 MB)</span></span><label className="photo-upload" htmlFor="photo"><Upload size={18} /><span><b>{photo ? "เปลี่ยนรูปภาพ" : "เลือกภาพจากอุปกรณ์"}</b><small>รองรับไฟล์รูป JPG, PNG หรือ WebP</small></span><input id="photo" type="file" accept="image/*" onChange={(event) => void handlePhoto(event.target.files?.[0])} /></label>{photoPreview && <div className="photo-preview"><Image src={photoPreview} alt="ตัวอย่างรูปที่แนบ" width={45} height={45} unoptimized /><span>{photo?.name}</span><button type="button" onClick={() => void handlePhoto()} aria-label="ลบรูป"><X size={15} /></button></div>}</div>
           </section>
+          {duplicateCandidate && <div className="duplicate-report-alert" role="alert">
+            <div className="duplicate-report-copy"><AlertTriangle size={17} /><div><strong>พบรายงานใกล้เคียงในจุดนี้</strong><p>{duplicateCandidate.candidate.locationName} · {duplicateCandidate.candidate.subdistrict} · ห่างประมาณ {duplicateCandidate.distanceMeters} ม. · ส่ง{timeAgo(duplicateCandidate.candidate.createdAt)}</p><small>ถ้าเป็นสถานการณ์เดียวกัน ยืนยันรายงานเดิมได้ หากเป็นคนละจุดหรือข้อมูลเปลี่ยน เลือกส่งเป็นรายงานใหม่</small></div></div>
+            <div className="duplicate-report-actions"><button type="button" className="button duplicate-confirm-button" onClick={() => void confirmExistingReport()} disabled={submitting}>{submitting ? "กำลังบันทึก…" : "ยืนยันรายงานเดิม"}</button><button type="button" className="button duplicate-new-button" onClick={() => void saveReport(true)} disabled={submitting}>ส่งเป็นรายงานใหม่</button></div>
+          </div>}
           {error && <div className="form-alert" role="alert"><AlertTriangle size={16} />{error}</div>}
           <button type="submit" className="button button-primary submit-report" disabled={submitting}>{submitting ? <><span className="button-spinner" />กำลังส่งรายงาน…</> : <><Send size={17} />ส่งรายงานระดับน้ำ</>}</button>
           <p className="form-privacy"><ShieldAlert size={14} />ส่งรายงานโดยไม่แสดงข้อมูลส่วนตัวของผู้แจ้ง</p>
@@ -770,7 +799,7 @@ function EmergencyContacts() {
 }
 
 export default function FloodWatchApp() {
-  const { reports, loading, liveMode, connected, connectionError, addReport, confirmReport, confirmStillFlooded, flagReport } = useFloodReports();
+  const { reports, loading, liveMode, connected, connectionError, addReport, confirmReport, confirmStillFlooded, confirmReportDetails, flagReport } = useFloodReports();
   const [view, setView] = useState<View>("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
@@ -886,7 +915,7 @@ export default function FloodWatchApp() {
       {connectionError && <div className="global-connection-alert"><AlertTriangle size={15} />{connectionError}<button onClick={() => window.location.reload()}>โหลดใหม่</button></div>}
       {actionError && <div className="global-connection-alert"><AlertTriangle size={15} />{actionError}<button onClick={() => setActionError("")} aria-label="ปิด"><X size={15} /></button></div>}
       {view === "home" && <HomeView reports={reports} onNavigate={navigate} onSelectReport={chooseReport} isLive={liveMode} connected={connected} watchedAreas={watchedAreas} notificationsEnabled={notificationsEnabled} onWatchAreasChange={saveWatchedAreas} onToggleNotifications={toggleAreaNotifications} />}
-      {view === "report" && <ReportView reports={reports} onSubmit={addReport} onNavigate={navigate} />}
+      {view === "report" && <ReportView reports={reports} onSubmit={addReport} onConfirmDuplicate={confirmReportDetails} onSelectReport={chooseReport} onNavigate={navigate} />}
         {view === "map" && <MapView reports={reports} selectedId={selectedId} onSelectReport={chooseReport} onStillFlooded={(id) => void runReportAction(() => confirmStillFlooded(id))} onReceded={(id) => void runReportAction(() => confirmReport(id, "receded"))} onFlag={(id, reason) => void runReportAction(() => flagReport(id, reason))} />}
       {view === "latest" && <LatestView reports={reports} onSelectReport={chooseReport} />}
       {view === "cctv" && <CctvView onNavigate={navigate} />}
